@@ -1,106 +1,124 @@
 <template>
-  <Dialog
-    v-model:visible="visible" header="Filtrar por deporte o institución"
-    modal
-    :style="{ width: '400px' }"
-    class="rounded-md"
-  >
-    <div class="flex flex-col gap-4">
-      <label for="filtro" class="text-sm font-semibold">opciones</label>
-      <Select
-  v-model="deporteSeleccionada"
-  :options="deporteOpciones"
-  optionLabel="label"
-  optionValue="value"
-  placeholder="Selecciona deporte"
-  class="w-full"
-/>
-  <Select
-  v-model="institucionSeleccionada"
-  :options="institucionOpciones"
-  optionLabel="label"
-  optionValue="value"
-  placeholder="Selecciona institucion"
-  class="w-full"
-/>
+  <Dialog v-model:visible="visible" :modal="true" :closable="true" :style="{ width: '400px' }">
+    <template #header>
+      <h2 class="text-3xl font-bold text-gray-800">Filtrar Equipos</h2>
+    </template>
 
+    <Form @submit="submit" :validation-schema="schema">
+      <div class="flex flex-col gap-4">
+        <!-- Deporte -->
+        <label for="sport_id" class="text-sm font-semibold">Deporte</label>
+        <Field name="sport_id" v-slot="{ field }">
+          <Dropdown
+            v-bind="field"
+            :options="sports"
+            optionLabel="na_sport"
+            :optionValue="option => Number(option.sport_id)"
+            placeholder="Selecciona un deporte"
+            class="w-full"
+            id="sport_id"
+          />
+        </Field>
+        <ErrorMessage name="sport_id" class="text-red-500 text-xs" />
 
-      <div class="flex justify-end gap-2 mt-4">
-        <Button
-          label="Cancelar"
-          severity="warn"
-          @click="cerrar"
-        />
-        <Button
-          label="Filtrar"
-          icon="pi pi-search"
-          severity="primary"
-          @click="filtrar"
-        />
-        <Button label="Limpiar filtro" severity="danger" icon="pi pi-times" @click="limpiar" />
+        <!-- Institución -->
+        <label for="institution_id" class="text-left">Institución</label>
+          <Field name="institution_id" v-slot="{ field }">
+            <Dropdown
+              v-bind="field"
+              :options="institutions"
+              optionLabel="na_institucion"
+              :optionValue="option => Number(option.institucion_id)"
+              placeholder="Selecciona una institución"
+              class="w-full"
+              id="institution_id"
+            />
+          </Field>
+          <ErrorMessage name="institution_id" class="text-red-500 text-xs" />
+        <!-- Botones -->
+        <div class="flex justify-end gap-2 mt-4">
+          <Button label="Cancelar" severity="secondary" @click="cerrar" />
+          <Button label="Filtrar" icon="pi pi-search" severity="primary" type="submit" />
+          <Button label="Limpiar filtro" icon="pi pi-times" severity="danger" @click="limpiar" />
+        </div>
       </div>
-    </div>
+    </Form>
   </Dialog>
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { Form, Field, ErrorMessage } from 'vee-validate';
+import * as yup from 'yup';
+import { toTypedSchema } from '@vee-validate/yup';
+
 import Dialog from 'primevue/dialog';
-// import InputText from 'primevue/inputtext';
 import Button from 'primevue/button';
-import Select from 'primevue/select';
-import { defineModel, defineEmits } from 'vue';
+import Dropdown from 'primevue/dropdown';
+import { send } from '@/api/send';
+import { useToast } from 'primevue/usetoast';
+import { ref, onMounted } from 'vue';
 
-// const props = defineProps({
-//   personaSeleccionada: {
-//     type: Number, // o String si usas nombres directamente
-//     required: false
-//   }
-// });
-
-const deporteSeleccionada = ref(null);
-const deporteOpciones = ref([
-  { label: 'Fútbol', value: 1 },
-  { label: 'Baloncesto', value: 2 },
-  { label: 'Tenis', value: 3 },
-  { label: 'Natación', value: 4 },
-  { label: 'Atletismo', value: 5 }
-]);
-
-const institucionSeleccionada = ref(null);
-const institucionOpciones = ref([
-  { label: 'Institución A', value: 1 },
-  { label: 'Institución B', value: 2 },
-  { label: 'Institución C', value: 3 }
-]);
-
-
+const toast = useToast();
 const visible = defineModel('visible');
-const emit = defineEmits(['filtrado', 'cerrar']);
+const emit = defineEmits(['filtrar', 'limpiar', 'cerrar']);
 
-const nombreFiltro = ref('');
+const sports = ref([]);
+const institutions = ref([]);
 
-const filtrar = () => {
-  emit('filtrado', nombreFiltro.value.trim().toLowerCase());
-  console.log('Filtrando por:', nombreFiltro.value);
+const schema = toTypedSchema(
+  yup.object({
+    sport_id: yup
+      .object({
+        value: yup
+          .number()
+          .typeError('Debe seleccionar un deporte válido')
+          .nullable()
+      })
+      .nullable(),
+    institution_id: yup
+      .object({
+        value: yup
+          .number()
+          .typeError('Debe seleccionar una institución válida')
+          .nullable()
+      })
+      .nullable()
+  }).test('at-least-one', 'Selecciona al menos un filtro', (values) => {
+    return values.sport_id || values.institution_id;
+  })
+);
+
+onMounted(async () => {
+  try {
+    const sportRes = await send({ endpoint: 'sport', method: 'get' });
+    sports.value = sportRes.data || [];
+  } catch (error) {
+    toast.add({ severity: 'error', summary: 'Error', detail: 'No se pudieron cargar los deportes.' });
+  }
+
+  try {
+    const instRes = await send({ endpoint: 'institution', method: 'get' });
+    institutions.value = instRes.data || [];
+  } catch (error) {
+    toast.add({ severity: 'error', summary: 'Error', detail: 'No se pudieron cargar las instituciones.' });
+  }
+});
+
+const submit = (values) => {
+  emit('filtrar', {
+    sport_id: values.sport_id || null,
+    institution_id: values.institution_id || null
+  });
+  visible.value = false;
+};
+
+const limpiar = () => {
+  emit('limpiar');
+  visible.value = false;
 };
 
 const cerrar = () => {
   emit('cerrar');
-  deporteSeleccionada.value = null;// Limpiar selección al cerrar
-  institucionSeleccionada.value = null; // Limpiar selección al cerrar
-  nombreFiltro.value = ''; // Limpiar filtro
-  console.log('Filtro cerrado y limpiado');
+  visible.value = false;
 };
-
-
-
-const limpiar = () => {
-  deporteSeleccionada.value = null;
-  institucionSeleccionada.value = null; // Limpiar selección
-  nombreFiltro.value = ''; // Limpiar filtro
-  console.log('Filtro limpiado');
-  emit('filtrado', null); // también actualiza el filtro en el padre
-};
-
 </script>

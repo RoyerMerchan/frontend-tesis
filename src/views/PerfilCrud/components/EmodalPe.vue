@@ -1,79 +1,85 @@
-<template>
-<Dialog v-model:visible="visible" header="Editar Perfil" :modal="true" :closable="true" :style="{ width: '600px'}" >
-    <Form @submit="submit" :validation-schema="schema" class="">
-  <div class=" grid gap 10">
-
-
-    <div class="flex flex-col w-full max-w-md mx-auto">
-      <label for="de_perfil" class="text-left">Perfil</label>
-      <Field name="de_perfil" v-slot="{ field }">
-        <InputText v-bind="field" id="de_perfil" placeholder="Ingrese Perfil" class="w-full" />
-      </Field>
-      <ErrorMessage name="de_perfil" class="text-red-500 text-xs" />
-    </div>
-
-
-    <!-- Botones -->
-    <div class="flex justify-end gap-2 mt-4">
-      <Button label="Cancelar" severity="secondary" @click="visible = false" />
-      <Button :label="modoEdicion ? 'Actualizar' : 'Guardar'" type="submit" />
-    </div>
-
-
-  </div>
-
-    </Form>
-  </Dialog>
-</template>
-
 <script setup>
-import { ref, watch } from 'vue';
 import { Form, Field, ErrorMessage } from 'vee-validate';
 import * as yup from 'yup';
 import { toTypedSchema } from '@vee-validate/yup';
+
 import Dialog from 'primevue/dialog';
 import Button from 'primevue/button';
 import InputText from 'primevue/inputtext';
+import { send } from '@/api/send';
+import { useToast } from 'primevue/usetoast';
+import { ref, watch } from 'vue';
 
-
-
-
+const toast = useToast();
 const visible = defineModel('visible');
-
-// 🆕 Nuevas props
-const props = defineProps({
-  modoEdicion: Boolean,
-  usuarioEditando: Object,
-});
+const props = defineProps({ perfil: Object });
+const emit = defineEmits(['update']);
 
 const form = ref({
-  de_perfil: '',
+  profile_id: null,
+  profile_de: ''
 });
 
-// 🧠 Rellenar campos si hay usuario a editar
-watch(() => props.perfeditando, (perf) => {
-  if (props.modoEdicion && perf) {
-    form.value = { ...perf };
+watch(() => props.perfil, (val) => {
+  if (val) {
+    form.value = {
+      profile_id: val.profile_id,
+      profile_de: val.profile_de
+    };
   }
 }, { immediate: true });
 
-// Validación del formulario
 const schema = toTypedSchema(
   yup.object({
-    de_perfil: yup.string().required('El campo Perfil es obligatorio'),
+    profile_de: yup.string().required('Descripción requerida')
   })
 );
 
+const submit = async (values) => {
+  const payload = {
+    id_profile: form.value.profile_id,
+    profile_de: values.profile_de
+  };
 
+  try {
+    await send({
+      endpoint: 'profile',
+      method: 'put',
+      body: payload
+    });
 
-// ✨ Emitir evento diferente según modo
-const emit = defineEmits(['guardar', 'actualizar']);
-const submit = () => {
-  if (props.modoEdicion) {
-    emit('actualizar', form.value);
-  } else {
-    emit('guardar', form.value);
+    toast.add({ severity: 'success', summary: 'Actualizado', detail: 'Perfil actualizado correctamente.' });
+    visible.value = false;
+    emit('update');
+  } catch (error) {
+    toast.add({ severity: 'error', summary: 'Error', detail: 'No se pudo actualizar el perfil.' });
   }
-  visible.value = false;
 };
 </script>
+
+<template>
+  <Dialog v-model:visible="visible" :modal="true" :closable="true" :style="{ width: '500px' }">
+    <template #header>
+      <h2 class="text-4xl font-bold text-gray-800">Editar Perfil</h2>
+    </template>
+
+    <Form @submit="submit" :validation-schema="schema" :initial-values="{ ...form }">
+      <div class="grid gap-10">
+        <!-- Campo: Descripción del perfil -->
+        <div class="flex flex-col w-full max-w-md mx-auto">
+          <label for="profile_de" class="text-left">Descripción</label>
+          <Field name="profile_de" v-slot="{ field }">
+            <InputText v-bind="field" id="profile_de" placeholder="Ej. Administrador" class="w-full" />
+          </Field>
+          <ErrorMessage name="profile_de" class="text-red-500 text-xs" />
+        </div>
+
+        <!-- Botones -->
+        <div class="flex justify-end w-full max-w-md mx-auto gap-2 mt-4">
+          <Button label="Cancelar" @click="visible = false" severity="secondary" />
+          <Button label="Guardar" type="submit" />
+        </div>
+      </div>
+    </Form>
+  </Dialog>
+</template>

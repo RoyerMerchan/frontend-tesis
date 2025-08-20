@@ -1,111 +1,123 @@
-<template>
-    <div class="card w-full bg-gray-100 flex items-center justify-center">
-        <div class="w-full">
-            <h2 class="text-2xl font-bold mb-6">Mantenimiento de tipo competencia</h2>
-            <CModal v-model:visible="modalVisibleC" />
-            <EModal v-model:visible="modalVisibleE" />
-            <FModal v-model:visible="modalVisibleF" @cerrar="modalVisibleF = false" />
-
-            <div class="flex flex-wrap gap-2 p-5">
-                <Button label="Nuevo tipo competencia" icon="pi pi-plus" @click="abrirCrear" />
-                <Button label="Eliminar" icon="pi pi-trash" severity="danger" />
-                <Button label="Filtrar" icon="pi pi-filter-fill" @click="abrirFiltro"></Button>
-            </div>
-            <div class="overflow-x-auto">
-                <DataTable :value="tcVisibles" v-model:selection="seleccionados" selectionMode="single" dataKey="id" :rowHover="true" class="w-full">
-                    <Column selectionMode="multiple" headerStyle="width: 3rem" />
-                    <Column field="name" header="nombre tipo competencia" />
-                    <Column field="id_sport" header="deporte" />
-                    <Column header="Acciones">
-                        <template #body="{ data }">
-                            <Button label="editar" icon="pi pi-pencil" class="p-button-sm mr-2" @click="abrirEditar(data)" severity="success" />
-                            <!-- <Button label="borrar" icon="pi pi-trash" class="p-button-sm p-button-danger" @click="confirmarEliminar(data)" /> -->
-                        </template>
-                    </Column>
-                </DataTable>
-            </div>
-        </div>
-    </div>
-</template>
-
 <script setup>
-import { computed, ref } from 'vue';
+import { onMounted, ref } from 'vue';
+import { send } from '@/api/send';
 
+import Toast from 'primevue/toast';
 import Button from 'primevue/button';
 import Column from 'primevue/column';
 import DataTable from 'primevue/datatable';
-import CModal from '../components/CModalTC.vue';
-import EModal from '../components/EModalTC.vue';
-import FModal from '../components/FModalTC.vue'; // Si necesitas el filtro, descomentar esta línea
 
-// Datos simulados
-const tc = ref([
-    { id: 1, name: 'Competencia A', id_sport: 101 },
-    { id: 2, name: 'Competencia B', id_sport: 102 },
-    { id: 3, name: 'Competencia C', id_sport: 101 }
-]);
+import CModalTypeComp from '../components/CModalTC.vue';
+import EModalTypeComp from '../components/EModalTC.vue';
+import FModalTypeComp from '../components/FModalTC.vue';
 
-const sport = [
-    { id: 101, nombre: 'Fútbol' },
-    { id: 102, nombre: 'Baloncesto' },
-    { id: 103, nombre: 'Natación' },
-    { id: 104, nombre: 'Atletismo' },
-    { id: 105, nombre: 'Tenis' },
-    { id: 106, nombre: 'Béisbol' }
-];
+import { useToast } from 'primevue/usetoast';
 
+const toast = useToast();
+
+const competencias = ref([]);
+const seleccionados = ref([]);
 const modalVisibleC = ref(false);
 const modalVisibleE = ref(false);
-const seleccionados = ref([]);
-const modoEdicion = ref(false);
-const tcEditando = ref(null);
-
-const formulario = ref({
-    name: '',
-    id_sport: null
-});
+const modalVisibleF = ref(false);
+const competenciaEditando = ref(null);
 
 const abrirCrear = () => {
-    modoEdicion.value = false;
-    tcEditando.value = null;
-    formulario.value = {
-        name: '',
-        id_sport: null
-    };
-    modalVisibleC.value = true;
+  modalVisibleC.value = true;
 };
 
-const abrirEditar = (tc) => {
-    modoEdicion.value = true;
-    tcEditando.value = tc;
-    Object.assign(formulario.value, tc);
+const abrirModalEdicion = (competencia) => {
+  if (competencia) {
+    competenciaEditando.value = competencia;
     modalVisibleE.value = true;
+  } else {
+    toast.add({ severity: 'warn', summary: 'Atención', detail: 'Selecciona una competencia para editar.' });
+  }
 };
 
-// const confirmarEliminar = (usuario) => {
-//   tc.value = tc.value.filter(u => u.id !== usuario.id);
-// };
-const filtroActivo = ref('');
+const selectCompetitions = async () => {
+  try {
+    const response = await send({
+      endpoint: 'typecompetition', // ajustá si tu endpoint es distinto
+      method: 'get'
+    });
+    competencias.value = response.data || [];
+  } catch (error) {
+    console.error('Error al cargar competencias:', error);
+    toast.add({ severity: 'error', summary: 'Error', detail: 'No se pudieron cargar las competencias.' });
+  }
+};
 
-const tcConDeporte = computed(() =>
-    tc.value.map((u) => {
-        const sports = sport.find((p) => p.id === u.id_sport);
-        return {
-            ...u,
-            nombreCompleto: sports ? `${sports.nombre} ` : '—'
-        };
-    })
-);
+const filtrarPorDeporte = async (sportId) => {
+  try {
+    const res = await send({ endpoint: `typecompetition/filter/${sportId}`, method: 'get' });
+    competencias.value = res.data || [];
+  } catch (error) {
+    toast.add({ severity: 'error', summary: 'Error', detail: 'No se pudo filtrar por deporte.' });
+  }
+};
 
-const tcVisibles = computed(() => {
-    if (!filtroActivo.value) {
-        return tcConDeporte.value; // sin filtro
-    }
-    return tcConDeporte.value.filter((u) => u.nombreCompleto.toLowerCase().includes(filtroActivo.value));
+
+const deleteCompetitions = async () => {
+  if (!seleccionados.value.length) {
+    toast.add({ severity: 'warn', summary: 'Atención', detail: 'Selecciona al menos una competencia para eliminar.' });
+    return;
+  }
+
+  try {
+    await Promise.all(
+      seleccionados.value.map(async (comp) => {
+        await send({
+          endpoint: `typecompetition/${comp.type_comp_id}`,
+          method: 'delete'
+        });
+      })
+    );
+    toast.add({ severity: 'success', summary: 'Eliminado', detail: 'Competencias eliminadas correctamente.' });
+    await selectCompetitions();
+    seleccionados.value = [];
+  } catch (error) {
+    console.error('Error al eliminar competencias:', error);
+    toast.add({ severity: 'error', summary: 'Error', detail: 'No se pudieron eliminar todas las competencias.' });
+  }
+};
+
+onMounted(async () => {
+  await selectCompetitions();
 });
-const modalVisibleF = ref(false);
-
-const abrirFiltro = () => {
-    modalVisibleF.value = true;
-};
 </script>
+
+<template>
+  <Toast />
+  <div class="card w-full bg-gray-100 flex items-center justify-center">
+    <div class="w-full">
+      <h2 class="text-2xl font-bold mb-6">Mantenimiento de Tipo de Competición</h2>
+
+
+      <CModalTypeComp v-model:visible="modalVisibleC" @create="selectCompetitions" />
+      <EModalTypeComp v-model:visible="modalVisibleE" :competencia="competenciaEditando" @update="selectCompetitions" />
+    <FModalTypeComp v-model:visible="modalVisibleF" @filtrar="filtrarPorDeporte" @limpiar="selectCompetitions" @cerrar="modalVisibleF"  />
+
+      <div class="flex flex-wrap gap-2 p-5">
+        <Button label="Nueva Competencia" icon="pi pi-plus" @click="abrirCrear" />
+        <Button label="Eliminar" icon="pi pi-trash" severity="danger" @click="deleteCompetitions" />
+        <Button label="Filtrar" icon="pi pi-filter" @click="modalVisibleF = true" />
+      </div>
+
+      <div class="overflow-x-auto">
+        <DataTable :value="competencias" v-model:selection="seleccionados" selectionMode="multiple" dataKey="type_comp_id"
+          :rowHover="true" class="w-full">
+          <Column selectionMode="multiple" headerStyle="width: 3rem" />
+          <Column field="na_type_comp" header="Tipo de Competencia" />
+          <Column field="na_sport" header="Deporte" />
+          <Column header="Acciones">
+            <template #body="{ data }">
+              <Button label="Editar" icon="pi pi-pencil" class="p-button-sm mr-2"
+                @click="abrirModalEdicion(data)" severity="success" />
+            </template>
+          </Column>
+        </DataTable>
+      </div>
+    </div>
+  </div>
+</template>

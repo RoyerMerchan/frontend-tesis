@@ -1,87 +1,87 @@
 <template>
-  <Dialog
-    v-model:visible="visible" header="Filtrar por deporte"
-    modal
-    :style="{ width: '400px' }"
-    class="rounded-md"
-  >
-    <div class="flex flex-col gap-4">
-      <label for="filtro" class="text-sm font-semibold">deporte</label>
-      <Select
-  v-model="deporteSeleccionada"
-  :options="deporteOpciones"
-  optionLabel="label"
-  optionValue="value"
-  placeholder="Selecciona deporte"
-  class="w-full"
-/>
+  <Dialog v-model:visible="visible"  :modal="true" :closable="true" :style="{ width: '400px' }">
+     <template #header>
+        <h2 class="text-3xl font-bold text-gray-800">filtrar tipo alineacion</h2>
+      </template>
+    <Form @submit="submit" :validation-schema="schema">
+      <div class="flex flex-col gap-4 ">
+        <label for="sport_id" class="text-sm font-semibold"></label>
+        <Field name="sport_id" v-slot="{ field }">
+          <Dropdown
+            v-bind="field"
+            :options="deportes"
+            optionLabel="na_sport"
+            :optionValue="(option) => Number(option.sport_id)"
+            placeholder="Selecciona deporte"
+            class="w-full"
+            id="sport_id"
+          />
+        </Field>
+        <ErrorMessage name="sport_id" class="text-red-500 text-xs" />
 
-      <div class="flex justify-end gap-2 mt-4">
-        <Button
-          label="Cancelar"
-          severity="warn"
-          @click="cerrar"
-        />
-        <Button
-          label="Filtrar"
-          icon="pi pi-search"
-          severity="primary"
-          @click="filtrar"
-        />
-        <Button label="Limpiar filtro" severity="danger" icon="pi pi-times" @click="limpiar" />
+        <div class="flex justify-end gap-2 mt-4">
+          <Button label="Cancelar" severity="secondary" @click="cerrar" />
+          <Button label="Filtrar" icon="pi pi-search" severity="primary" type="submit" />
+          <Button label="Limpiar filtro" icon="pi pi-times" severity="danger" @click="limpiar" />
+        </div>
       </div>
-    </div>
+    </Form>
   </Dialog>
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { Form, Field, ErrorMessage } from 'vee-validate';
+import * as yup from 'yup';
+import { toTypedSchema } from '@vee-validate/yup';
+
 import Dialog from 'primevue/dialog';
-// import InputText from 'primevue/inputtext';
 import Button from 'primevue/button';
-import Select from 'primevue/select';
-import { defineModel, defineEmits } from 'vue';
+import Dropdown from 'primevue/dropdown';
+import { send } from '@/api/send';
+import { useToast } from 'primevue/usetoast';
+import { ref, onMounted } from 'vue';
 
-// const props = defineProps({
-//   personaSeleccionada: {
-//     type: Number, // o String si usas nombres directamente
-//     required: false
-//   }
-// });
-
-const deporteSeleccionada = ref(null);
-const deporteOpciones = ref([
-  { label: 'Fútbol', value: 1 },
-  { label: 'Baloncesto', value: 2 },
-  { label: 'Tenis', value: 3 },
-  { label: 'Natación', value: 4 },
-  { label: 'Atletismo', value: 5 }
-]);
-
-
-
+const toast = useToast();
 const visible = defineModel('visible');
-const emit = defineEmits(['filtrado', 'cerrar']);
+const emit = defineEmits(['filtrar', 'cerrar']);
 
-const nombreFiltro = ref('');
+const deportes = ref([]);
 
-const filtrar = () => {
-  emit('filtrado', nombreFiltro.value.trim().toLowerCase());
-  console.log('Filtrando por:', nombreFiltro.value);
+const schema = toTypedSchema(
+  yup.object({
+    sport_id: yup
+      .object({
+        value: yup
+          .number()
+          .typeError('Debe seleccionar un deporte válido')
+          .required('deporte requerido')
+      })
+      .required('deporte requerido')
+  })
+);
+
+onMounted(async () => {
+  try {
+    const response = await send({ endpoint: 'sport', method: 'get' });
+    deportes.value = response.data || [];
+  } catch (error) {
+    console.error('Error al cargar deportes:', error);
+    toast.add({ severity: 'error', summary: 'Error', detail: 'No se pudieron cargar los perfiles.' });
+  }
+});
+
+const submit = (values) => {
+  emit('filtrar', values.sport_id.value);
+  visible.value = false;
+};
+
+const limpiar = () => {
+  emit('limpiar', null);
+  visible.value = false;
 };
 
 const cerrar = () => {
   emit('cerrar');
-  deporteSeleccionada.value = null; // Limpiar selección al cerrar
-  nombreFiltro.value = ''; // Limpiar filtro
-  console.log('Filtro cerrado y limpiado');
+  visible.value = false;
 };
-
-
-
-const limpiar = () => {
-  deporteSeleccionada.value = null;
-  emit('filtrado', null); // también actualiza el filtro en el padre
-};
-
 </script>

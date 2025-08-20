@@ -1,114 +1,107 @@
-<template>
-    <div class="card w-full bg-gray-100 flex items-center justify-center">
-        <div class="w-full">
-            <h2 class="text-2xl font-bold mb-6">Mantenimiento de tipo alineacion</h2>
-            <CModal v-model:visible="modalVisibleC" />
-            <EModal v-model:visible="modalVisibleE" />
-            <FModal v-model:visible="modalVisibleF" @cerrar="modalVisibleF = false" />
-
-            <div class="flex flex-wrap gap-2 p-5">
-                <Button label="Nuevo tipo alineacion" icon="pi pi-plus" @click="abrirCrear" />
-                <Button label="Eliminar" icon="pi pi-trash" severity="danger" />
-                <Button label="Filtrar" icon="pi pi-filter-fill" @click="abrirFiltro"></Button>
-            </div>
-            <div class="overflow-x-auto">
-                <DataTable :value="tluVisibles" v-model:selection="seleccionados" selectionMode="single" dataKey="id" :rowHover="true" class="w-full">
-                    <Column selectionMode="multiple" headerStyle="width: 3rem" />
-                    <Column field="name" header="nombre tipo alineacion" />
-                    <Column field="de_type_lineup" header="descripcion" />
-                    <Column field="SportName" header="deporte" />
-                    <Column header="Acciones">
-                        <template #body="{ data }">
-                            <Button label="editar" icon="pi pi-pencil" class="p-button-sm mr-2" @click="abrirEditar(data)" severity="success" />
-                            <!-- <Button label="borrar" icon="pi pi-trash" class="p-button-sm p-button-danger" @click="confirmarEliminar(data)" /> -->
-                        </template>
-                    </Column>
-                </DataTable>
-            </div>
-        </div>
-    </div>
-</template>
-
 <script setup>
-import { computed, ref } from 'vue';
-
+import { onMounted, ref } from 'vue';
+import { send } from '@/api/send';
 import Button from 'primevue/button';
 import Column from 'primevue/column';
 import DataTable from 'primevue/datatable';
-import CModal from '../components/CModalTLU.vue';
-import EModal from '../components/EModalTLU.vue';
-import FModal from '../components/FModalTLU.vue'; // Si necesitas el filtro, descomentar esta línea
+import Toast from 'primevue/toast';
+import CModalLineUp from '../components/CModalTLU.vue';
+import EModalLineUp from '../components/EModalTLU.vue';
+import FModalLineUp from '../components/FModalTLU.vue';
+import { useToast } from 'primevue/usetoast';
 
-// Datos simulados
-const tlu = ref([
-    { id: 1, name: 'Alineacion A', de_type_lineup: '4-4-2', id_sport: 101 },
-    { id: 2, name: 'Alineacion B', de_type_lineup: '3-5-2', id_sport: 102 },
-    { id: 3, name: 'Alineacion C', de_type_lineup: '4-3-3', id_sport: 101 }
-]);
-
-const sport = [
-    { id: 101, nombre: 'Fútbol' },
-    { id: 102, nombre: 'Baloncesto' },
-    { id: 103, nombre: 'Natación' },
-    { id: 104, nombre: 'Atletismo' },
-    { id: 105, nombre: 'Tenis' },
-    { id: 106, nombre: 'Béisbol' }
-];
-
+const toast = useToast();
+const lineUps = ref([]);
+const seleccionados = ref([]);
 const modalVisibleC = ref(false);
 const modalVisibleE = ref(false);
-const seleccionados = ref([]);
-const modoEdicion = ref(false);
-const tluEditando = ref(null);
-
-const formulario = ref({
-    name: '',
-    de_type_lineup: '',
-    id_sport: null
-});
+const modalVisibleF = ref(false);
+const alineacionEditando = ref(null);
 
 const abrirCrear = () => {
-    modoEdicion.value = false;
-    tluEditando.value = null;
-    formulario.value = {
-        name: '',
-        de_type_lineup: '',
-        id_sport: null
-    };
-    modalVisibleC.value = true;
+  alineacionEditando.value = null;
+  modalVisibleC.value = true;
 };
 
-const abrirEditar = (tc) => {
-    modoEdicion.value = true;
-    tluEditando.value = tc;
-    Object.assign(formulario.value, tc);
+const abrirEdicion = (alineacion) => {
+  if (alineacion) {
+    alineacionEditando.value = alineacion;
     modalVisibleE.value = true;
+  } else {
+    toast.add({ severity: 'warn', summary: 'Atención', detail: 'Selecciona una alineación para editar.' });
+  }
 };
 
-// const confirmarEliminar = (usuario) => {
-//   tc.value = tc.value.filter(u => u.id !== usuario.id);
-// };
-const filtroActivo = ref('');
-
-const tluConDeporte = computed(() =>
-    tlu.value.map((u) => {
-        const sports = sport.find((p) => p.id === u.id_sport);
-        return {
-            ...u,
-            SportName: sports ? `${sports.nombre} ` : '—'
-        };
-    })
-);
-
-const tluVisibles = computed(() => {
-    if (!filtroActivo.value) {
-        return tluConDeporte.value; // sin filtro
-    }
-    return tluConDeporte.value.filter((u) => u.nombreCompleto.toLowerCase().includes(filtroActivo.value));
-});
-const modalVisibleF = ref(false);
-
-const abrirFiltro = () => {
-    modalVisibleF.value = true;
+const cargarLineUps = async () => {
+  try {
+    const res = await send({ endpoint: 'typelineup', method: 'get' });
+    lineUps.value = res.data || [];
+  } catch (error) {
+    toast.add({ severity: 'error', summary: 'Error', detail: 'No se pudieron cargar las alineaciones.' });
+  }
 };
+
+const filtrarPorDeporte = async (sportId) => {
+  try {
+    const res = await send({ endpoint: `typelineup/filter/${sportId}`, method: 'get' });
+    lineUps.value = res.data || [];
+  } catch (error) {
+    toast.add({ severity: 'error', summary: 'Error', detail: 'No se pudo filtrar por deporte.' });
+  }
+};
+
+const eliminarLineUps = async () => {
+  if (!seleccionados.value || seleccionados.value.length === 0) {
+    toast.add({ severity: 'warn', summary: 'Atención', detail: 'Selecciona al menos una alineación para eliminar.' });
+    return;
+  }
+
+  try {
+    await Promise.all(
+      seleccionados.value.map(async (alineacion) => {
+        await send({ endpoint: `typelineup/${alineacion.type_line_up_id}`, method: 'delete' });
+      })
+    );
+    toast.add({ severity: 'success', summary: 'Eliminado', detail: 'Alineaciones eliminadas correctamente.' });
+    await cargarLineUps();
+    seleccionados.value = [];
+  } catch (error) {
+    toast.add({ severity: 'error', summary: 'Error', detail: 'No se pudieron eliminar todas las alineaciones.' });
+  }
+};
+
+onMounted(cargarLineUps);
 </script>
+
+<template>
+  <Toast />
+  <div class="card w-full bg-gray-100 flex items-center justify-center">
+    <div class="w-full">
+      <h2 class="text-2xl font-bold mb-6">Mantenimiento de tipo alineacion</h2>
+
+      <CModalLineUp v-model:visible="modalVisibleC" @create="cargarLineUps" />
+      <EModalLineUp v-model:visible="modalVisibleE" :alineacion="alineacionEditando" @update="cargarLineUps" />
+      <FModalLineUp v-model:visible="modalVisibleF" @filtrar="filtrarPorDeporte" @limpiar="cargarLineUps" @cerrar="modalVisibleF = false" />
+
+      <div class="flex flex-wrap gap-2 p-5">
+        <Button label="Nueva Alineación" icon="pi pi-plus" @click="abrirCrear" />
+        <Button label="Eliminar" icon="pi pi-trash" severity="danger" @click="eliminarLineUps" />
+        <Button label="Filtrar" icon="pi pi-filter" @click="modalVisibleF = true" />
+      </div>
+
+      <div class="overflow-x-auto">
+        <DataTable :value="lineUps" v-model:selection="seleccionados" selectionMode="multiple" dataKey="type_line_up_id" :rowHover="true" class="w-full">
+          <Column selectionMode="multiple" headerStyle="width: 3rem" />
+          <Column field="na_line_up" header="Nombre" />
+          <Column field="de_line_up" header="Descripción" />
+          <Column field="na_sport" header="Deporte" />
+          <Column header="Acciones">
+            <template #body="{ data }">
+              <Button label="Editar" icon="pi pi-pencil" class="p-button-sm mr-2" @click="abrirEdicion(data)" severity="success" />
+            </template>
+          </Column>
+        </DataTable>
+      </div>
+    </div>
+  </div>
+</template>

@@ -1,127 +1,91 @@
 <template>
-  <Dialog
-    v-model:visible="visible" header="Filtrar por deporte o institución"
-    modal
-    :style="{ width: '400px' }"
-    class="rounded-md"
-  >
-    <div class="flex flex-col gap-4">
-      <label for="filtro" class="text-sm font-semibold">opciones</label>
+  <Dialog v-model:visible="visible" :modal="true" :closable="true" :style="{ width: '400px' }">
+    <template #header>
+      <h2 class="text-3xl font-bold text-gray-800">Filtrar por Miembro</h2>
+    </template>
 
-      <Select
-  v-model="competitionSeleccionada"
-  :options="competitionopciones"
-  optionLabel="label"
-  optionValue="value"
-  placeholder="Selecciona competición"
-  class="w-full"
-/>
-  <Select
-  v-model="conceptoSeleccionado"
-  :options="conceptoopciones"
-  optionLabel="label"
-  optionValue="value"
-  placeholder="Selecciona concepto"
-  class="w-full"
-/>
+    <Form @submit="submit" :validation-schema="schema">
+      <div class="flex flex-col gap-4">
+        <label for="team_member_id" class="text-sm font-semibold">Miembro del equipo</label>
+        <Field name="team_member_id" v-slot="{ field }">
+          <Dropdown
+            v-bind="field"
+            :options="miembros"
+            optionLabel="na_person"
+            :optionValue="(option) => Number(option.team_member_id)"
+            placeholder="Selecciona un miembro"
+            class="w-full"
+            id="team_member_id"
+          />
+        </Field>
+        <ErrorMessage name="team_member_id" class="text-red-500 text-xs" />
 
-<Select
-  v-model="jugadorSeleccionado"
-  :options="jugadoropciones"
-  optionLabel="label"
-  optionValue="value"
-  placeholder="Selecciona jugador"
-  class="w-full"
-/>
-
-
-      <div class="flex justify-end gap-2 mt-4">
-        <Button
-          label="Cancelar"
-          severity="warn"
-          @click="cerrar"
-        />
-        <Button
-          label="Filtrar"
-          icon="pi pi-search"
-          severity="primary"
-          @click="filtrar"
-        />
-        <Button label="Limpiar filtro" severity="danger" icon="pi pi-times" @click="limpiar" />
+        <div class="flex justify-end gap-2 mt-4">
+          <Button label="Cancelar" severity="secondary" @click="cerrar" />
+          <Button label="Filtrar" icon="pi pi-search" severity="primary" type="submit" />
+          <Button label="Limpiar filtro" icon="pi pi-times" severity="danger" @click="limpiar" />
+        </div>
       </div>
-    </div>
+    </Form>
   </Dialog>
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { Form, Field, ErrorMessage } from 'vee-validate';
+import * as yup from 'yup';
+import { toTypedSchema } from '@vee-validate/yup';
+
 import Dialog from 'primevue/dialog';
-// import InputText from 'primevue/inputtext';
 import Button from 'primevue/button';
-import Select from 'primevue/select';
-import { defineModel, defineEmits } from 'vue';
+import Dropdown from 'primevue/dropdown';
+import { send } from '@/api/send';
+import { useToast } from 'primevue/usetoast';
+import { ref, onMounted } from 'vue';
 
-// const props = defineProps({
-//   personaSeleccionada: {
-//     type: Number, // o String si usas nombres directamente
-//     required: false
-//   }
-// });
-
-const competitionSeleccionada = ref(null);
-const competitionopciones = ref([
-  { label: 'Competición A', value: 1 },
-  { label: 'Competición B', value: 2 },
-  { label: 'Competición C', value: 3 },
-  { label: 'Competición D', value: 4 },
-  { label: 'Competición E', value: 5 }
-]);
-const conceptoSeleccionado = ref(null);
-const conceptoopciones = ref([
-  { label: 'Concepto A', value: 1 },
-  { label: 'Concepto B', value: 2 },
-  { label: 'Concepto C', value: 3 },
-  { label: 'Concepto D', value: 4 },
-  { label: 'Concepto E', value: 5 }
-]);
-const jugadorSeleccionado = ref(null);
-const jugadoropciones = ref([
-  { label: 'Jugador A', value: 1 },
-  { label: 'Jugador B', value: 2 },
-  { label: 'Jugador C', value: 3 },
-  { label: 'Jugador D', value: 4 },
-  { label: 'Jugador E', value: 5 }
-]);
-
-
+const toast = useToast();
 const visible = defineModel('visible');
-const emit = defineEmits(['filtrado', 'cerrar']);
+const emit = defineEmits(['filtrar', 'limpiar', 'cerrar']);
 
-const nombreFiltro = ref('');
+const miembros = ref([]);
 
-const filtrar = () => {
-  emit('filtrado', nombreFiltro.value.trim().toLowerCase());
-  console.log('Filtrando por:', nombreFiltro.value);
+const schema = toTypedSchema(
+  yup.object({
+    team_member_id: yup
+      .object({
+        value: yup
+          .number()
+          .typeError('Debe seleccionar un miembro válido')
+          .required('Miembro requerido')
+      })
+      .required('Miembro requerido')
+  })
+);
+
+onMounted(async () => {
+  try {
+    const response = await send({ endpoint: 'teammember', method: 'get' });
+    miembros.value = (response.data || []).map(m => ({
+      ...m,
+      na_person: `${m.na_person} ${m.ln_person}`
+    }));
+  } catch (error) {
+    console.error('Error al cargar miembros:', error);
+    toast.add({ severity: 'error', summary: 'Error', detail: 'No se pudieron cargar los miembros.' });
+  }
+});
+
+const submit = (values) => {
+  emit('filtrar', values.team_member_id.value);
+  visible.value = false;
+};
+
+const limpiar = () => {
+  emit('limpiar', null);
+  visible.value = false;
 };
 
 const cerrar = () => {
   emit('cerrar');
-  competitionSeleccionada.value = null;// Limpiar selección al cerrar
-  conceptoSeleccionado.value = null; // Limpiar selección al cerrar
-  jugadorSeleccionado.value = null; // Limpiar selección al cerrar
-  nombreFiltro.value = ''; // Limpiar filtro
-  console.log('Filtro cerrado y limpiado');
+  visible.value = false;
 };
-
-
-
-const limpiar = () => {
-  competitionSeleccionada.value = null;
-  conceptoSeleccionado.value = null; // Limpiar selección
-  jugadorSeleccionado.value = null; // Limpiar selección
-  nombreFiltro.value = ''; // Limpiar filtro
-  console.log('Filtro limpiado');
-  emit('filtrado', null); // también actualiza el filtro en el padre
-};
-
 </script>

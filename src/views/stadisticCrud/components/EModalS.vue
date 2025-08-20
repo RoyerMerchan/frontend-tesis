@@ -1,156 +1,186 @@
-<template>
-<Dialog v-model:visible="visible" header="Editar estadistica" :modal="true" :closable="true" :style="{ width: '600px'}" >
-    <Form @submit="submit" :validation-schema="schema" class="">
-  <div class=" grid gap 10">
-
-    <div class="flex flex-col w-full max-w-md mx-auto">
-      <label for="stadistic" class="text-left">estadistica</label>
-      <Field name="stadistic" v-slot="{ field }">
-        <InputText v-bind="field" id="stadistic" placeholder="Ingrese estadistica" class="w-full" />
-      </Field>
-      <ErrorMessage name="stadistic" class="text-red-500 text-xs" />
-    </div>
-
-
-    <div class="flex flex-col w-full max-w-md mx-auto">
-      <label for="id_stadistic_concept" class="text-left">concepto estadistico</label>
-      <Field name="id_stadistic_concept" v-slot="{ field }">
-        <Select
-          v-bind="field"
-          :options="tiposStadisticConcept"
-          optionLabel="label"
-          optionValue="value"
-          placeholder="Selecciona uno"
-          class="w-full"
-          id="id_stadistic_concept"
-        />
-      </Field>
-      <ErrorMessage name="id_stadistic_concept" class="text-red-500 text-xs" />
-    </div>
-
-     <div class="flex flex-col w-full max-w-md mx-auto">
-      <label for="id_person" class="text-left">jugador</label>
-      <Field name="id_person" v-slot="{ field }">
-        <Select
-          v-bind="field"
-          :options="tipospersonas"
-          optionLabel="label"
-          optionValue="value"
-          placeholder="Selecciona uno"
-          class="w-full"
-          id="id_person"
-        />
-      </Field>
-      <ErrorMessage name="id_person" class="text-red-500 text-xs" />
-    </div>
-
-     <div class="flex flex-col w-full max-w-md mx-auto">
-      <label for="id_competition" class="text-left">competicion</label>
-      <Field name="id_competition" v-slot="{ field }">
-        <Select
-          v-bind="field"
-          :options="tiposCompeticion"
-          optionLabel="label"
-          optionValue="value"
-          placeholder="Selecciona uno"
-          class="w-full"
-          id="id_competition"
-        />
-      </Field>
-      <ErrorMessage name="id_competition" class="text-red-500 text-xs" />
-    </div>
-
-    <!-- Botones -->
-    <div class="flex justify-end gap-2 mt-4">
-      <Button label="Cancelar" severity="secondary" @click="visible = false" />
-      <Button :label="modoEdicion ? 'Actualizar' : 'Guardar'" type="submit" />
-    </div>
-
-
-  </div>
-
-    </Form>
-  </Dialog>
-</template>
-
 <script setup>
-import { ref, watch } from 'vue';
 import { Form, Field, ErrorMessage } from 'vee-validate';
 import * as yup from 'yup';
 import { toTypedSchema } from '@vee-validate/yup';
+
 import Dialog from 'primevue/dialog';
 import Button from 'primevue/button';
 import InputText from 'primevue/inputtext';
-import { Select } from 'primevue';
+import Dropdown from 'primevue/dropdown';
+import { send } from '@/api/send';
+import { useToast } from 'primevue/usetoast';
+import { ref, watch, onMounted } from 'vue';
 
-
-
+const toast = useToast();
 const visible = defineModel('visible');
+const props = defineProps({ estadistica: Object });
+const emit = defineEmits(['update']);
 
-// 🆕 Nuevas props
-const props = defineProps({
-  modoEdicion: Boolean,
-  teamEditando: Object,
-});
+const conceptos = ref([]);
+const miembros = ref([]);
+const competencias = ref([]);
 
 const form = ref({
-  id_stadistic_concept: null,
-  id_player: null,
-  id_competition: null,
-  stadistic: '',
+  sport_statistic_id: null,
+  statistic_concept_id: null,
+  team_member_id: null,
+  comp_id: null,
+  statistic: ''
 });
 
-// 🧠 Rellenar campos si hay usuario a editar
-watch(() => props.teamEditando, (teamE) => {
-  if (props.modoEdicion && teamE) {
-    form.value = { ...teamE };
+watch(() => props.estadistica, (val) => {
+  if (val) {
+    form.value = {
+      sport_statistic_id: val.sport_statistic_id,
+      statistic_concept_id: Number(val.statistic_concept_id),
+      team_member_id: Number(val.team_member_id),
+      comp_id: Number(val.comp_id),
+      statistic: val.statistic
+    };
   }
 }, { immediate: true });
 
-const tiposStadisticConcept = [
-  { label: 'Goles', value: 1 },
-  { label: 'Asistencias', value: 2 },
-  { label: 'Tarjetas Amarillas', value: 3 },
-  { label: 'Tarjetas Rojas', value: 4 },
-  { label: 'Faltas Cometidas', value: 5 },
-  { label: 'Faltas Recibidas', value: 6 },
-  { label: 'Pases Completados', value: 7 },
-  { label: 'Pases Fallidos', value: 8 },
-  { label: 'Tiros a Puerta', value: 9 },
-];
-const tiposCompeticion = [
-  { label: 'Competición A', value: 1 },
-  { label: 'Competición B', value: 2 },
-  { label: 'Competición C', value: 3 },
-  { label: 'Competición D', value: 4 },
-  { label: 'Competición E', value: 5 },
-];
+onMounted(async () => {
+  try {
+    const [conceptosRes, miembrosRes, competenciasRes] = await Promise.all([
+      send({ endpoint: 'specific/meassure', method: 'get' }),
+      send({ endpoint: 'teammember', method: 'get' }),
+      send({ endpoint: 'competition', method: 'get' })
+    ]);
 
-const tipospersonas = [
-  { label: 'Jugador A', value: 1 },
-  { label: 'Jugador B', value: 2 },
-  { label: 'Jugador C', value: 3 },
-  { label: 'Jugador D', value: 4 },
-  { label: 'Jugador E', value: 5 },
-];
+    conceptos.value = (conceptosRes.data || []).map(c => ({
+      ...c,
+      unit_meassure: `${c.na_sport} - ${c.unit_meassure}`
+    }));
+
+    miembros.value = (miembrosRes.data || []).map(m => ({
+      ...m,
+      na_person: `${m.na_person} ${m.ln_person}`
+    }));
+
+    competencias.value = competenciasRes.data || [];
+  } catch (error) {
+    toast.add({ severity: 'error', summary: 'Error', detail: 'No se pudieron cargar los datos.' });
+  }
+});
 
 const schema = toTypedSchema(
   yup.object({
-    id_stadistic_concept: yup.number().required('El concepto estadístico es obligatorio').nullable(),
-    id_person: yup.number().required('El jugador es obligatorio').nullable(),
-    id_competition: yup.number().required('La competición es obligatoria').nullable(),
-    stadistic: yup.string().required('La estadística es obligatoria'),
+    statistic_concept_id: yup
+      .object({ value: yup.number().required('Concepto requerido') })
+      .required('Concepto requerido'),
+    team_member_id: yup
+      .object({ value: yup.number().required('Miembro requerido') })
+      .required('Miembro requerido'),
+    comp_id: yup
+      .object({ value: yup.number().required('Competencia requerida') })
+      .required('Competencia requerida'),
+    statistic: yup
+      .number()
+      .typeError('Debe ser un número')
+      .required('Valor requerido')
   })
 );
 
-// ✨ Emitir evento diferente según modo
-const emit = defineEmits(['guardar', 'actualizar']);
-const submit = () => {
-  if (props.modoEdicion) {
-    emit('actualizar', form.value);
-  } else {
-    emit('guardar', form.value);
+const submit = async (values) => {
+  const payload = {
+    sport_statistic_id: form.value.sport_statistic_id,
+    statistic_concept_id: values.statistic_concept_id.value,
+    team_member_id: values.team_member_id.value,
+    comp_id: values.comp_id.value,
+    statistic: values.statistic
+  };
+
+  try {
+    await send({
+      endpoint: `sportstatistic`,
+      method: 'put',
+      body: payload
+    });
+
+    toast.add({ severity: 'success', summary: 'Actualizado', detail: 'Estadística actualizada correctamente.' });
+    visible.value = false;
+    emit('update');
+  } catch (error) {
+    toast.add({ severity: 'error', summary: 'Error', detail: 'No se pudo actualizar la estadística.' });
   }
-  visible.value = false;
 };
 </script>
+
+<template>
+  <Dialog v-model:visible="visible" :modal="true" :closable="true" :style="{ width: '500px' }">
+    <template #header>
+      <h2 class="text-4xl font-bold text-gray-800">Editar Estadística</h2>
+    </template>
+
+    <Form @submit="submit" :validation-schema="schema" :initial-values="{ ...form }">
+      <div class="grid gap-10">
+        <!-- Concepto -->
+        <div class="flex flex-col w-full max-w-md mx-auto">
+          <label for="statistic_concept_id" class="text-left">Concepto</label>
+          <Field name="statistic_concept_id" v-slot="{ field }">
+            <Dropdown
+              v-bind="field"
+              :options="conceptos"
+              optionLabel="unit_meassure"
+              :optionValue="opt => Number(opt.statistic_concept_id)"
+              placeholder="Selecciona un concepto"
+              class="w-full"
+              id="statistic_concept_id"
+            />
+          </Field>
+          <ErrorMessage name="statistic_concept_id" class="text-red-500 text-xs" />
+        </div>
+
+        <!-- Miembro -->
+        <div class="flex flex-col w-full max-w-md mx-auto">
+          <label for="team_member_id" class="text-left">Miembro del equipo</label>
+          <Field name="team_member_id" v-slot="{ field }">
+            <Dropdown
+              v-bind="field"
+              :options="miembros"
+              optionLabel="na_person"
+              :optionValue="opt => Number(opt.team_member_id)"
+              placeholder="Selecciona un miembro"
+              class="w-full"
+              id="team_member_id"
+            />
+          </Field>
+          <ErrorMessage name="team_member_id" class="text-red-500 text-xs" />
+        </div>
+
+        <!-- Competencia -->
+        <div class="flex flex-col w-full max-w-md mx-auto">
+          <label for="comp_id" class="text-left">Competencia</label>
+          <Field name="comp_id" v-slot="{ field }">
+            <Dropdown
+              v-bind="field"
+              :options="competencias"
+              optionLabel="comp_id"
+              :optionValue="opt => Number(opt.comp_id)"
+              placeholder="Selecciona una competencia"
+              class="w-full"
+              id="comp_id"
+            />
+          </Field>
+          <ErrorMessage name="comp_id" class="text-red-500 text-xs" />
+        </div>
+
+        <!-- Valor -->
+        <div class="flex flex-col w-full max-w-md mx-auto">
+          <label for="statistic" class="text-left">Valor</label>
+          <Field name="statistic" v-slot="{ field }">
+            <InputText v-bind="field" id="statistic" placeholder="Ingrese valor" class="w-full" />
+          </Field>
+          <ErrorMessage name="statistic" class="text-red-500 text-xs" />
+        </div>
+
+        <!-- Botones -->
+        <div class="flex justify-end w-full max-w-md mx-auto gap-2 mt-4">
+          <Button label="Cancelar" @click="visible = false" severity="secondary" />
+          <Button label="Guardar" type="submit" />
+        </div>
+      </div>
+    </Form>
+  </Dialog>
+</template>

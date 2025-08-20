@@ -1,39 +1,4 @@
-<template>
-  <Dialog v-model:visible="visible" header="Crear lugar de evento" :modal="true" :closable="true" :style="{ width: '600px'}" >
-    <Form @submit="submit" :validation-schema="schema" class="">
-  <div class=" grid gap 10">
-
-    <div class="flex flex-col w-full max-w-md mx-auto">
-      <label for="name_place" class="text-left">nombre de lugar</label>
-      <Field name="name_place" v-slot="{ field }">
-        <InputText v-bind="field" id="name_place" placeholder="Ingrese nombre lugar" class="w-full" />
-      </Field>
-      <ErrorMessage name="name_place" class="text-red-500 text-xs" />
-    </div>
-
-
-    <div class="flex flex-col w-full max-w-md mx-auto">
-      <label for="ubication" class="text-left">ubicacion</label>
-      <Field name="ubication" v-slot="{ field }">
-        <InputText v-bind="field" id="ubication" placeholder="Ingrese ubicacion" class="w-full" />
-      </Field>
-      <ErrorMessage name="ubication" class="text-red-500 text-xs" />
-    </div>
-
-    <!-- Botones -->
-    <div class="flex justify-end w-full max-w-md mx-auto gap-2 mt-4">
-      <Button label="Cancelar" @click="visible = false" severity="secondary" />
-      <Button label="Guardar" type="submit" />
-    </div>
-
-  </div>
-
-    </Form>
-  </Dialog>
-</template>
-
 <script setup>
-import { ref } from 'vue';
 import { Form, Field, ErrorMessage } from 'vee-validate';
 import * as yup from 'yup';
 import { toTypedSchema } from '@vee-validate/yup';
@@ -41,35 +6,73 @@ import { toTypedSchema } from '@vee-validate/yup';
 import Dialog from 'primevue/dialog';
 import Button from 'primevue/button';
 import InputText from 'primevue/inputtext';
+import { send } from '@/api/send';
+import { useToast } from 'primevue/usetoast';
+import { ref } from 'vue';
 
-
-
-
-
-// Props para control externo (opcional)
+const toast = useToast();
 const visible = defineModel('visible');
+const emit = defineEmits(['create']);
 
-// Validación del formulario
+
 const schema = toTypedSchema(
   yup.object({
-    name_place: yup.string().required('El nombre del lugar es obligatorio').min(3, 'El nombre del lugar debe tener al menos 3 caracteres'),
-    ubication: yup.string().required('La ubicación es obligatoria').min(3, 'La ubicación debe tener al menos 3 caracteres'),
+    name_place_event: yup.string().required('Nombre requerido'),
+    ubication_place_event: yup.string().required('Ubicación requerida')
   })
 );
 
-// Reactive form data
-const form = ref({
-  name_place: '',
-  ubication: '',
-});
-
-// Watch for changes in the form to reset errors
-
-
-
-const submit = () => {
-  console.log('Formulario válido:', form.value);
+const submit = async (values) => {
   visible.value = false;
-  // Aquí puedes emitir el evento o hacer la llamada a API
+
+  try {
+    const response = await send({
+      endpoint: 'placeevent',
+      method: 'post',
+      body: values
+    });
+
+    toast.add({ severity: 'success', summary: 'Éxito', detail: 'Lugar creado correctamente.' });
+    emit('create');
+  } catch (error) {
+    console.error('Error al crear lugar:', error);
+    toast.add({ severity: 'error', summary: 'Error', detail: 'No se pudo crear el lugar.' });
+  }
 };
 </script>
+
+<template>
+  <Dialog v-model:visible="visible" :modal="true" :closable="true" :style="{ width: '500px' }">
+    <template #header>
+      <h2 class="text-2xl font-bold text-gray-800">Crear Lugar de Evento</h2>
+    </template>
+
+    <Form @submit="submit" :validation-schema="schema" >
+      <div class="grid gap-6 space-y-4">
+        <!-- Nombre del lugar -->
+        <div class="flex flex-col w-full max-w-md mx-auto">
+          <label for="name_place_event" class="text-left">Nombre del lugar</label>
+          <Field name="name_place_event" v-slot="{ field }">
+            <InputText v-bind="field" id="name_place_event" placeholder="" class="w-full" />
+          </Field>
+          <ErrorMessage name="name_place_event" class="text-red-500 text-xs" />
+        </div>
+
+        <!-- Ubicación -->
+        <div class="flex flex-col w-full max-w-md mx-auto">
+          <label for="ubication_place_event" class="text-left">Ubicación</label>
+          <Field name="ubication_place_event" v-slot="{ field }">
+            <InputText v-bind="field" id="ubication_place_event" placeholder="" class="w-full" />
+          </Field>
+          <ErrorMessage name="ubication_place_event" class="text-red-500 text-xs" />
+        </div>
+
+        <!-- Botones -->
+        <div class="flex justify-end w-full max-w-md mx-auto gap-2 mt-4">
+          <Button label="Cancelar" @click="visible = false" severity="secondary" />
+          <Button label="Guardar" type="submit" />
+        </div>
+      </div>
+    </Form>
+  </Dialog>
+</template>

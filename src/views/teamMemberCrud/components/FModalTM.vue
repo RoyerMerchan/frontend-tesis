@@ -1,106 +1,92 @@
 <template>
-  <Dialog
-    v-model:visible="visible" header="Filtrar por deporte o institución"
-    modal
-    :style="{ width: '400px' }"
-    class="rounded-md"
-  >
-    <div class="flex flex-col gap-4">
-      <label for="filtro" class="text-sm font-semibold">opciones</label>
-      <Select
-  v-model="equipoSeleccionada"
-  :options="equipoOpciones"
-  optionLabel="label"
-  optionValue="value"
-  placeholder="Selecciona equipo"
-  class="w-full"
-/>
-  <Select
-  v-model="personaSeleccionada"
-  :options="personaOpciones"
-  optionLabel="label"
-  optionValue="value"
-  placeholder="Selecciona persona"
-  class="w-full"
-/>
+  <Dialog v-model:visible="visible" :modal="true" :closable="true" :style="{ width: '400px' }">
+    <template #header>
+      <h2 class="text-3xl font-bold text-gray-800">Filtrar Miembros por Equipo</h2>
+    </template>
 
+    <Form @submit="submit" :validation-schema="schema">
+      <div class="flex flex-col gap-4">
+        <label for="team_id" class="text-sm font-semibold">Equipo</label>
+        <Field name="team_id" v-slot="{ field }">
+          <Dropdown
+            v-bind="field"
+            :options="teams"
+            optionLabel="na_team"
+            :optionValue="(option) => Number(option.team_id)"
+            placeholder="Selecciona un Equipo"
+            class="w-full"
+            id="team_id"
+          />
+        </Field>
+        <ErrorMessage name="team_id" class="text-red-500 text-xs" />
 
-      <div class="flex justify-end gap-2 mt-4">
-        <Button
-          label="Cancelar"
-          severity="warn"
-          @click="cerrar"
-        />
-        <Button
-          label="Filtrar"
-          icon="pi pi-search"
-          severity="primary"
-          @click="filtrar"
-        />
-        <Button label="Limpiar filtro" severity="danger" icon="pi pi-times" @click="limpiar" />
+        <div class="flex justify-end gap-2 mt-4">
+          <Button label="Cancelar" severity="secondary" @click="cerrar" />
+          <Button label="Filtrar" icon="pi pi-search" severity="primary" type="submit" />
+          <Button label="Limpiar filtro" icon="pi pi-times" severity="danger" @click="limpiar" />
+        </div>
       </div>
-    </div>
+    </Form>
   </Dialog>
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { Form, Field, ErrorMessage } from 'vee-validate';
+import * as yup from 'yup';
+import { toTypedSchema } from '@vee-validate/yup';
+
 import Dialog from 'primevue/dialog';
-// import InputText from 'primevue/inputtext';
 import Button from 'primevue/button';
-import Select from 'primevue/select';
-import { defineModel, defineEmits } from 'vue';
+import Dropdown from 'primevue/dropdown';
+import { send } from '@/api/send';
+import { useToast } from 'primevue/usetoast';
+import { ref, onMounted } from 'vue';
 
-// const props = defineProps({
-//   personaSeleccionada: {
-//     type: Number, // o String si usas nombres directamente
-//     required: false
-//   }
-// });
-
-const equipoSeleccionada = ref(null);
-const equipoOpciones = ref([
-  { label: 'Equipo A', value: 1 },
-  { label: 'Equipo B', value: 2 },
-  { label: 'Equipo C', value: 3 }
-]);
-
-const personaSeleccionada = ref(null);
-const personaOpciones = ref([
-  { label: 'Persona A', value: 101 },
-  { label: 'Persona B', value: 102 },
-  { label: 'Persona C', value: 103 },
-  { label: 'Persona D', value: 104 },
-  { label: 'Persona E', value: 105 }
-]);
-
-
+const toast = useToast();
 const visible = defineModel('visible');
-const emit = defineEmits(['filtrado', 'cerrar']);
+const emit = defineEmits(['filtrar', 'limpiar', 'cerrar']);
 
-const nombreFiltro = ref('');
+const teams = ref([]);
 
-const filtrar = () => {
-  emit('filtrado', nombreFiltro.value.trim().toLowerCase());
-  console.log('Filtrando por:', nombreFiltro.value);
+const schema = toTypedSchema(
+  yup.object({
+    team_id: yup
+      .object({
+        value: yup
+          .number()
+          .typeError('Debe seleccionar un equipo válido')
+          .required('Equipo requerido')
+      })
+      .required('Equipo requerido')
+  })
+);
+
+onMounted(async () => {
+  try {
+    const response = await send({ endpoint: 'team', method: 'get' });
+
+    teams.value = (response.data || []).map(team => ({
+      ...team,
+      na_team: `${team.na_team} - ${team.na_sport || 'Sin deporte'}`
+    }));
+  } catch (error) {
+    console.error('Error al cargar equipos:', error);
+    toast.add({ severity: 'error', summary: 'Error', detail: 'No se pudieron cargar los equipos.' });
+  }
+});
+
+const submit = (values) => {
+  emit('filtrar', values.team_id.value); // Enviar solo el ID numérico
+  visible.value = false;
+};
+
+const limpiar = () => {
+  emit('limpiar', null);
+  visible.value = false;
 };
 
 const cerrar = () => {
   emit('cerrar');
-  equipoSeleccionada.value = null;// Limpiar selección al cerrar
-  personaSeleccionada.value = null; // Limpiar selección al cerrar
-  nombreFiltro.value = ''; // Limpiar filtro
-  console.log('Filtro cerrado y limpiado');
+  visible.value = false;
 };
-
-
-
-const limpiar = () => {
-  equipoSeleccionada.value = null;
-  personaSeleccionada.value = null; // Limpiar selección
-  nombreFiltro.value = ''; // Limpiar filtro
-  console.log('Filtro limpiado');
-  emit('filtrado', null); // también actualiza el filtro en el padre
-};
-
 </script>

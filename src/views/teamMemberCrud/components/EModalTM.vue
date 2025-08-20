@@ -1,124 +1,121 @@
-<template>
-<Dialog v-model:visible="visible" header="Editar miembro equipo" :modal="true" :closable="true" :style="{ width: '600px'}" >
-    <Form @submit="submit" :validation-schema="schema" class="">
-  <div class=" grid gap 10">
-
-    <div class="flex flex-col w-full max-w-md mx-auto">
-      <label for="number_player" class="text-left">numero jugadir</label>
-      <Field name="number_player" v-slot="{ field }">
-        <InputText v-bind="field" id="number_player" placeholder="Ingrese numero" class="w-full" />
-      </Field>
-      <ErrorMessage name="number_player" class="text-red-500 text-xs" />
-    </div>
-
-
-    <div class="flex flex-col w-full max-w-md mx-auto">
-      <label for="id_team" class="text-left">equipo</label>
-      <Field name="id_team" v-slot="{ field }">
-        <Select
-          v-bind="field"
-          :options="tiposEquipo"
-          optionLabel="label"
-          optionValue="value"
-          placeholder="Selecciona uno"
-          class="w-full"
-          id="id_team"
-        />
-      </Field>
-      <ErrorMessage name="id_team" class="text-red-500 text-xs" />
-    </div>
-
-     <div class="flex flex-col w-full max-w-md mx-auto">
-      <label for="id_person" class="text-left">jugador</label>
-      <Field name="id_person" v-slot="{ field }">
-        <Select
-          v-bind="field"
-          :options="tiposPersonas"
-          optionLabel="label"
-          optionValue="value"
-          placeholder="Selecciona uno"
-          class="w-full"
-          id="id_person"
-        />
-      </Field>
-      <ErrorMessage name="id_person" class="text-red-500 text-xs" />
-    </div>
-
-    <!-- Botones -->
-    <div class="flex justify-end gap-2 mt-4">
-      <Button label="Cancelar" severity="secondary" @click="visible = false" />
-      <Button :label="modoEdicion ? 'Actualizar' : 'Guardar'" type="submit" />
-    </div>
-
-
-  </div>
-
-    </Form>
-  </Dialog>
-</template>
-
 <script setup>
-import { ref, watch } from 'vue';
 import { Form, Field, ErrorMessage } from 'vee-validate';
 import * as yup from 'yup';
 import { toTypedSchema } from '@vee-validate/yup';
+
 import Dialog from 'primevue/dialog';
 import Button from 'primevue/button';
 import InputText from 'primevue/inputtext';
-import { Select } from 'primevue';
+import Dropdown from 'primevue/dropdown';
+import { send } from '@/api/send';
+import { useToast } from 'primevue/usetoast';
+import { ref, onMounted, computed, watch } from 'vue';
 
-
-
+const toast = useToast();
 const visible = defineModel('visible');
-
-// 🆕 Nuevas props
+const emit = defineEmits(['update']);
 const props = defineProps({
-  modoEdicion: Boolean,
-  teamMEditando: Object,
+  jugador: Object
 });
 
+const teams = ref([]);
 const form = ref({
-  id_person: null,
-  number_player: null,
-  id_team: null,
+  team_member_id: null,
+  num_team_member: '',
+  team_id: null
 });
 
-// 🧠 Rellenar campos si hay usuario a editar
-watch(() => props.teamMEditando, (teamE) => {
-  if (props.modoEdicion && teamE) {
-    form.value = { ...teamE };
-  }
-}, { immediate: true });
-
-const tiposEquipo = [
-  { label: 'Equipo A', value: 1 },
-  { label: 'Equipo B', value: 2 },
-  { label: 'Equipo C', value: 3 },
-];
-
-const tiposPersonas = [
-  { label: 'Jugador 1', value: 101 },
-  { label: 'Jugador 2', value: 102 },
-  { label: 'Jugador 3', value: 103 },
-  { label: 'Jugador 4', value: 104 },
-  { label: 'Jugador 5', value: 105 },
-];
 const schema = toTypedSchema(
   yup.object({
-    id_person: yup.number().required('El jugador es obligatorio').nullable(),
-    number_player: yup.number().required('El numero de jugador es obligatorio').nullable(),
-    id_team: yup.number().required('El equipo es obligatorio').nullable(),
+    num_team_member: yup.string().required('numero requerido'),
+    team_id: yup
+      .object({
+        value: yup.number().typeError('Selecciona un equipo válido').required('Requerido')
+      })
+      .required('Requerido')
   })
 );
 
-// ✨ Emitir evento diferente según modo
-const emit = defineEmits(['guardar', 'actualizar']);
-const submit = () => {
-  if (props.modoEdicion) {
-    emit('actualizar', form.value);
-  } else {
-    emit('guardar', form.value);
+onMounted(async () => {
+  try {
+    const teamRes = await send({ endpoint: 'team', method: 'get' });
+    teams.value = teamRes.data || [];
+  } catch (error) {
+    toast.add({ severity: 'error', summary: 'Error', detail: 'No se pudieron cargar los equipos.' });
   }
+});
+
+watch(() => props.jugador, (val) => {
+  if (val) {
+    form.value = {
+      team_member_id: val.team_member_id,
+      num_team_member: val.num_team_member,
+      team_id: { value: Number(val.team_id) }
+    };
+  }
+}, { immediate: true });
+
+const submit = async (values) => {
   visible.value = false;
+
+  const payload = {
+    team_member_id: form.value.team_member_id,
+    num_team_member: values.num_team_member,
+    team_id: values.team_id.value,
+  };
+
+  try {
+    await send({
+      endpoint: `teammember`,
+      method: 'put',
+      body: payload
+    });
+    toast.add({ severity: 'success', summary: 'Actualizado', detail: 'Jugador actualizado correctamente.' });
+    emit('update');
+  } catch (error) {
+    toast.add({ severity: 'error', summary: 'Error', detail: 'No se pudo actualizar el jugador.' });
+  }
 };
 </script>
+
+<template>
+  <Dialog v-model:visible="visible" :modal="true" :closable="true" :style="{ width: '500px' }">
+    <template #header>
+      <h2 class="text-3xl font-bold text-gray-800">Editar jugador</h2>
+    </template>
+
+    <Form @submit="submit" :validation-schema="schema" :initial-values="form">
+      <div class="grid gap-6">
+        <div class="flex flex-col w-full max-w-md mx-auto">
+          <label for="num_team_member" class="text-left">Numero de jugador</label>
+          <Field name="num_team_member" v-slot="{ field }">
+            <InputText v-bind="field" id="num_team_member" class="w-full" />
+          </Field>
+          <ErrorMessage name="num_team_member" class="text-red-500 text-xs" />
+        </div>
+
+        <div class="flex flex-col w-full max-w-md mx-auto">
+          <label for="team_id" class="text-left">Equipo</label>
+          <Field name="team_id" v-slot="{ field }">
+            <Dropdown
+              v-bind="field"
+              :options="teams"
+              optionLabel="na_team"
+              :optionValue="option => Number(option.team_id)"
+              placeholder="Selecciona un equipo"
+              class="w-full"
+              id="team_id"
+            />
+          </Field>
+          <ErrorMessage name="team_id" class="text-red-500 text-xs" />
+        </div>
+
+
+        <div class="flex justify-end w-full max-w-md mx-auto gap-2 mt-4">
+          <Button label="Cancelar" @click="visible = false" severity="secondary" />
+          <Button label="Actualizar" type="submit" />
+        </div>
+      </div>
+    </Form>
+  </Dialog>
+</template>

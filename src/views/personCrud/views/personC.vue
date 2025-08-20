@@ -1,111 +1,120 @@
-<template>
-    <div class="card w-full bg-gray-100 flex items-center justify-center">
-        <div class="w-full">
-            <h2 class="text-2xl font-bold mb-6">Mantenimiento de Personas</h2>
-            <CModal v-model:visible="modalVisibleC" />
-            <EModal v-model:visible="modalVisibleE" />
-            <FModal v-model:visible="modalVisibleF" @cerrar="modalVisibleF = false" />
-
-            <div class="flex flex-wrap gap-2 p-5">
-                <Button label="Nueva Persona" icon="pi pi-plus" @click="abrirCrear" />
-                <Button label="Eliminar" icon="pi pi-trash" severity="danger" />
-                <Button label="Filtrar" icon="pi pi-filter-fill" @click="abrirFiltro"></Button>
-            </div>
-            <div class="overflow-x-auto">
-                <DataTable :value="personasVisibles" v-model:selection="seleccionados" selectionMode="single" dataKey="id" :rowHover="true" class="w-full">
-                    <Column selectionMode="multiple" headerStyle="width: 3rem" />
-                    <Column field="name" header="Usuario" />
-                    <Column field="lastname" header="Email" />
-                    <Column field="descriptiontp" header="tipo persona" />
-                    <Column header="Acciones">
-                        <template #body="{ data }">
-                            <Button label="editar" icon="pi pi-pencil" class="p-button-sm mr-2" @click="abrirEditar(data)" severity="success" />
-                            <!-- <Button label="borrar" icon="pi pi-trash" class="p-button-sm p-button-danger" @click="confirmarEliminar(data)" /> -->
-                        </template>
-                    </Column>
-                </DataTable>
-            </div>
-        </div>
-    </div>
-</template>
-
 <script setup>
-import { computed, ref } from 'vue';
+import { onMounted, ref } from 'vue';
 
+import { send } from '@/api/send';
 import Button from 'primevue/button';
 import Column from 'primevue/column';
 import DataTable from 'primevue/datatable';
-import CModal from '../components/CModalP.vue';
-import EModal from '../components/EModalP.vue';
-import FModal from '../components/FModalP.vue'; // Si necesitas el filtro, descomentar esta línea
+import Toast from 'primevue/toast';
 
-// Datos simulados
-const person = ref([
-    { id: 1, name: 'Juan', lastname: 'Pérez', id_type_person: 101 },
-    { id: 2, name: 'Ana', lastname: 'Gómez', id_type_person: 102 },
-    { id: 3, name: 'Luis', lastname: 'Martínez', id_type_person: 101 }
-]);
+import CModalPerson from '../components/CModalP.vue';
+import EModalPerson from '../components/EModalP.vue';
+import FModalPerson from '../components/FModalP.vue'; // Si necesitas el filtro, descomentar esta línea
 
-const tipo_personas = [
-    { id: 101, nombre: 'Estudiante' },
-    { id: 102, nombre: 'Profesor' },
-    { id: 103, nombre: 'Administrador' }
-];
+import { useToast } from 'primevue/usetoast';
 
+const toast = useToast();
+
+const personas = ref([]);
+const seleccionadas = ref([]);
 const modalVisibleC = ref(false);
 const modalVisibleE = ref(false);
-const seleccionados = ref([]);
-const modoEdicion = ref(false);
-const personEditando = ref(null);
-
-const formulario = ref({
-    name: '',
-    lastname: '',
-    id_type_person: null
-});
+const modalVisibleF = ref(false); // Si necesitas el filtro, descomentar esta línea
+const personaEditando = ref(null);
 
 const abrirCrear = () => {
-    modoEdicion.value = false;
-    personEditando.value = null;
-    formulario.value = {
-        name: '',
-        lastname: '',
-        id_type_person: null
-    };
-    modalVisibleC.value = true;
+  personaEditando.value = null;
+  modalVisibleC.value = true;
 };
 
-const abrirEditar = (person) => {
-    modoEdicion.value = true;
-    personEditando.value = person;
-    Object.assign(formulario.value, person);
+const abrirEdicion = (persona) => {
+  if (persona) {
+    personaEditando.value = persona;
     modalVisibleE.value = true;
+  } else {
+    toast.add({ severity: 'warn', summary: 'Atención', detail: 'Selecciona una persona para editar.' });
+  }
 };
 
-// const confirmarEliminar = (usuario) => {
-//   usuarios.value = usuarios.value.filter(u => u.id !== usuario.id);
-// };
-const filtroActivo = ref('');
-
-const usuariosConTipopersona = computed(() =>
-    person.value.map((u) => {
-        const tipo_persona = tipo_personas.find((p) => p.id === u.id_type_person);
-        return {
-            ...u,
-            descriptiontp: tipo_persona ? `${tipo_persona.nombre}` : '—'
-        };
-    })
-);
-
-const personasVisibles = computed(() => {
-    if (!filtroActivo.value) {
-        return usuariosConTipopersona.value; // sin filtro
-    }
-    return usuariosConTipopersona.value.filter((u) => u.tipoPersona.toLowerCase().includes(filtroActivo.value));
-});
-const modalVisibleF = ref(false);
-
-const abrirFiltro = () => {
-    modalVisibleF.value = true;
+const filtrarPorTipoPersona = async (id_type_person) => {
+  try {
+    const response = await send({
+      endpoint: `person/persontp/${id_type_person}`,
+      method: 'get'
+    });
+    personas.value = response.data || [];
+  } catch (error) {
+    toast.add({ severity: 'error', summary: 'Error', detail: 'No se pudieron cargar las personas.' });
+  }
 };
+
+const cargarPersonas = async () => {
+  try {
+    const response = await send({
+      endpoint: 'person',
+      method: 'get'
+    });
+    personas.value = response.data || [];
+  } catch (error) {
+    toast.add({ severity: 'error', summary: 'Error', detail: 'No se pudieron cargar las personas.' });
+  }
+};
+
+const eliminarPersonas = async () => {
+  if (!seleccionadas.value.length) {
+    toast.add({ severity: 'warn', summary: 'Atención', detail: 'Selecciona al menos una persona para eliminar.' });
+    return;
+  }
+
+  try {
+    await Promise.all(
+      seleccionadas.value.map(async (persona) => {
+        await send({
+          endpoint: `person/${persona.person_id}`,
+          method: 'delete'
+        });
+      })
+    );
+    toast.add({ severity: 'success', summary: 'Eliminado', detail: 'Personas eliminadas correctamente.' });
+    await cargarPersonas();
+    seleccionadas.value = [];
+  } catch (error) {
+    toast.add({ severity: 'error', summary: 'Error', detail: 'No se pudieron eliminar todas las personas.' });
+  }
+};
+
+onMounted(cargarPersonas);
 </script>
+
+<template>
+  <Toast />
+  <div class="card w-full bg-gray-100 flex items-center justify-center">
+    <div class="w-full">
+      <h2 class="text-2xl font-bold mb-6">Mantenimiento de Personas</h2>
+
+      <CModalPerson v-model:visible="modalVisibleC" @create="cargarPersonas" />
+      <EModalPerson v-model:visible="modalVisibleE" :persona="personaEditando" @update="cargarPersonas" />
+      <FModalPerson v-model:visible="modalVisibleF" @filtrar="filtrarPorTipoPersona" @limpiar="cargarPersonas" @cerrar="modalVisibleF = false"/> <!-- Si necesitas el filtro, descomentar esta línea -->
+
+      <div class="flex flex-wrap gap-2 p-5">
+        <Button label="Nueva Persona" icon="pi pi-plus" @click="abrirCrear" />
+        <Button label="Eliminar" icon="pi pi-trash" severity="danger" @click="eliminarPersonas" />
+        <Button label="Filtrar" icon="pi pi-filter" @click="modalVisibleF = true" /> <!-- Si necesitas el filtro, descomentar esta línea -->
+      </div>
+
+      <div class="overflow-x-auto">
+        <DataTable :value="personas" v-model:selection="seleccionadas" selectionMode="multiple" dataKey="person_id" :rowHover="true" class="w-full">
+          <Column selectionMode="multiple" headerStyle="width: 3rem" />
+          <Column field="na_person" header="Nombre" />
+          <Column field="ln_person" header="Apellido" />
+          <Column field="de_type_person" header="Tipo de Persona" />
+          <Column header="Acciones">
+            <template #body="{ data }">
+              <Button label="Editar" icon="pi pi-pencil" class="p-button-sm mr-2" @click="abrirEdicion(data)" severity="success" />
+            </template>
+          </Column>
+        </DataTable>
+      </div>
+    </div>
+  </div>
+</template>

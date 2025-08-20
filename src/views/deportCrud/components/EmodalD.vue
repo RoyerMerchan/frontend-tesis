@@ -1,89 +1,102 @@
 <template>
-<Dialog v-model:visible="visible" header="Editar Deporte" :modal="true" :closable="true" :style="{ width: '600px'}" >
-    <Form @submit="submit" :validation-schema="schema" class="">
-  <div class=" grid gap 10">
+    <Dialog v-model:visible="visible" :modal="true" :closable="true" :style="{ width: '500px' }">
+        <template #header>
+            <h2 class="text-4xl font-bold text-gray-800">Editar Deporte</h2>
+        </template>
+        <Form @submit="submit" :validation-schema="schema" :initial-values="form">
+            <div class="grid gap-10">
+                <!-- Campo: Nombre del deporte -->
+                <div class="flex flex-col w-full max-w-md mx-auto">
+                    <label for="name" class="text-left">Nombre</label>
+                    <Field name="name" v-slot="{ field }">
+                        <InputText v-bind="field" id="name" placeholder="Ingrese nombre del deporte" class="w-full" />
+                    </Field>
+                    <ErrorMessage name="name" class="text-red-500 text-xs" />
+                </div>
 
-     <div class="flex flex-col w-full max-w-md mx-auto">
-      <label for="deport" class="text-left">Deporte</label>
-      <Field name="deport" v-slot="{ field }">
-        <InputText v-bind="field" id="deport" placeholder="Ingrese deporte" class="w-full" />
-      </Field>
-      <ErrorMessage name="deport" class="text-red-500 text-xs" />
-    </div>
+                <!-- Campo: Descripción -->
+                <div class="flex flex-col w-full max-w-md mx-auto">
+                    <label for="description" class="text-left">Descripción (opcional)</label>
+                    <Field name="description" v-slot="{ field }">
+                        <InputText v-bind="field" id="description" placeholder="Ingrese descripción" class="w-full" />
+                    </Field>
+                    <ErrorMessage name="description" class="text-red-500 text-xs" />
+                </div>
 
-
-    <div class="flex flex-col w-full max-w-md mx-auto">
-      <label for="descripcion" class="text-left">descripcion</label>
-      <Field name="descripcion" v-slot="{ field }">
-        <InputText v-bind="field" id="descripcion" placeholder="Ingrese descripcion" class="w-full" />
-      </Field>
-      <ErrorMessage name="descripcion" class="text-red-500 text-xs" />
-    </div>
-
-
-    <!-- Botones -->
-    <div class="flex justify-end gap-2 mt-4">
-      <Button label="Cancelar" severity="secondary" @click="visible = false" />
-      <Button :label="modoEdicion ? 'Actualizar' : 'Guardar'" type="submit" />
-    </div>
-
-
-  </div>
-
-    </Form>
-  </Dialog>
+                <!-- Botones -->
+                <div class="flex justify-end w-full max-w-md mx-auto gap-2 mt-4">
+                    <Button label="Cancelar" @click="visible = false" severity="secondary" />
+                    <Button label="Guardar" type="submit" />
+                </div>
+            </div>
+        </Form>
+    </Dialog>
 </template>
 
 <script setup>
-import { ref, watch } from 'vue';
 import { Form, Field, ErrorMessage } from 'vee-validate';
 import * as yup from 'yup';
 import { toTypedSchema } from '@vee-validate/yup';
+
 import Dialog from 'primevue/dialog';
 import Button from 'primevue/button';
 import InputText from 'primevue/inputtext';
+import { send } from '@/api/send';
+import { useToast } from 'primevue/usetoast';
+import { ref, watch } from 'vue';
 
-
-
-
+const toast = useToast();
 const visible = defineModel('visible');
-
-// 🆕 Nuevas props
-const props = defineProps({
-  modoEdicion: Boolean,
-  usuarioEditando: Object,
-});
+const props = defineProps({ deporte: Object });
+const emit = defineEmits(['update']);
 
 const form = ref({
-  deport: '',
-  descripcion: '',
-
+    sport_id: null,
+    name: '',
+    description: ''
 });
 
-// 🧠 Rellenar campos si hay usuario a editar
-watch(() => props.deporteEditando, (deporte) => {
-  if (props.modoEdicion && deporte) {
-    form.value = { ...deporte };
-  }
+watch(() => props.deporte, (val) => {
+    if (val) {
+        form.value = {
+            sport_id: val.sport_id,
+            name: val.na_sport,
+            description: val.de_sport || ''
+        };
+    }
 }, { immediate: true });
 
-// Validación del formulario
 const schema = toTypedSchema(
-  yup.object({
-    deport: yup.string().required('El nombre del deporte es obligatorio').min(3, 'El nombre del deporte debe tener al menos 3 caracteres'),
-    descripcion: yup.string().required('La descripción es obligatoria').min(3, 'La descripción debe tener al menos 3 caracteres'),
-  })
+    yup.object({
+        name: yup.string().required('Requerido'),
+        description: yup
+            .string()
+            .transform((value) => (value === '' ? null : value))
+            .nullable()
+            .notRequired()
+            .min(3, 'Mínimo 3 caracteres')
+    })
 );
 
+const submit = async (values) => {
+    const payload = {
+        id_sport: form.value.sport_id,
+        name_sport: values.name,
+        de_sport: values.description || undefined
+    };
 
-// ✨ Emitir evento diferente según modo
-const emit = defineEmits(['guardar', 'actualizar']);
-const submit = () => {
-  if (props.modoEdicion) {
-    emit('actualizar', form.value);
-  } else {
-    emit('guardar', form.value);
-  }
-  visible.value = false;
+    try {
+        const response = await send({
+            endpoint: 'sport',
+            method: 'put',
+            body: payload
+        });
+
+        toast.add({ severity: 'success', summary: 'Actualizado', detail: 'Deporte actualizado correctamente.' });
+        visible.value = false;
+        emit('update');
+    } catch (error) {
+        toast.add({ severity: 'error', summary: 'Error', detail: 'No se pudo actualizar el deporte.' });
+    }
 };
 </script>

@@ -1,89 +1,103 @@
-<template>
-<Dialog v-model:visible="visible" header="Editar lugar de evento" :modal="true" :closable="true" :style="{ width: '600px'}" >
-    <Form @submit="submit" :validation-schema="schema" class="">
-  <div class=" grid gap 10">
-
-     <div class="flex flex-col w-full max-w-md mx-auto">
-      <label for="name_place" class="text-left">Deporte</label>
-      <Field name="name_place" v-slot="{ field }">
-        <InputText v-bind="field" id="name_place" placeholder="Ingrese Nombre de lugar" class="w-full" />
-      </Field>
-      <ErrorMessage name="name_place" class="text-red-500 text-xs" />
-    </div>
-
-
-    <div class="flex flex-col w-full max-w-md mx-auto">
-      <label for="ubication" class="text-left">descripcion</label>
-      <Field name="ubication" v-slot="{ field }">
-        <InputText v-bind="field" id="ubication" placeholder="Ingrese ubicacion" class="w-full" />
-      </Field>
-      <ErrorMessage name="ubication" class="text-red-500 text-xs" />
-    </div>
-
-
-    <!-- Botones -->
-    <div class="flex justify-end gap-2 mt-4">
-      <Button label="Cancelar" severity="secondary" @click="visible = false" />
-      <Button :label="modoEdicion ? 'Actualizar' : 'Guardar'" type="submit" />
-    </div>
-
-
-  </div>
-
-    </Form>
-  </Dialog>
-</template>
-
 <script setup>
-import { ref, watch } from 'vue';
 import { Form, Field, ErrorMessage } from 'vee-validate';
 import * as yup from 'yup';
 import { toTypedSchema } from '@vee-validate/yup';
+
 import Dialog from 'primevue/dialog';
 import Button from 'primevue/button';
 import InputText from 'primevue/inputtext';
+import { send } from '@/api/send';
+import { useToast } from 'primevue/usetoast';
+import { ref, watch } from 'vue';
 
-
-
-
+const toast = useToast();
 const visible = defineModel('visible');
-
-// 🆕 Nuevas props
-const props = defineProps({
-  modoEdicion: Boolean,
-  usuarioEditando: Object,
-});
+const props = defineProps({ lugar: Object });
+const emit = defineEmits(['update']);
 
 const form = ref({
-  name_place: '',
-  ubication: '',
-
+  place_event_id: null,
+  name_place_event: '',
+  ubication_place_event: ''
 });
 
-// 🧠 Rellenar campos si hay usuario a editar
-watch(() => props.deporteEditando, (deporte) => {
-  if (props.modoEdicion && deporte) {
-    form.value = { ...deporte };
-  }
-}, { immediate: true });
+watch(
+    () => props.lugar,
+    (val) => {
+        if (val) {
+        form.value = {
+            place_event_id: val.place_event_id,
+            name_place_event: val.na_place_event,
+            ubication_place_event: val.ubi_place_event
+        };
+        }
+    },
+    { immediate: true }
+    );
 
-// Validación del formulario
 const schema = toTypedSchema(
   yup.object({
-    name_place: yup.string().required('El nombre del lugar es obligatorio').min(3, 'El nombre del lugar debe tener al menos 3 caracteres'),
-    ubication: yup.string().required('La ubicación es obligatoria').min(3, 'La ubicación debe tener al menos 3 caracteres'),
+    name_place_event: yup.string().required('Nombre requerido'),
+    ubication_place_event: yup.string().required('Ubicación requerida')
   })
 );
 
+const submit = async (values) => {
+  const payload = {
+    id_place_event: form.value.place_event_id,
+    name_place_event: values.name_place_event,
+    ubication_place_event: values.ubication_place_event
+  };
 
-// ✨ Emitir evento diferente según modo
-const emit = defineEmits(['guardar', 'actualizar']);
-const submit = () => {
-  if (props.modoEdicion) {
-    emit('actualizar', form.value);
-  } else {
-    emit('guardar', form.value);
+  try {
+    await send({
+      endpoint: 'placeevent',
+      method: 'put',
+      body: payload
+    });
+
+    toast.add({ severity: 'success', summary: 'Actualizado', detail: 'Lugar actualizado correctamente.' });
+    visible.value = false;
+    emit('update');
+  } catch (error) {
+    console.error('Error al actualizar lugar:', error);
+    toast.add({ severity: 'error', summary: 'Error', detail: 'No se pudo actualizar el lugar.' });
   }
-  visible.value = false;
 };
 </script>
+
+<template>
+  <Dialog v-model:visible="visible" :modal="true" :closable="true" :style="{ width: '500px' }">
+    <template #header>
+      <h2 class="text-2xl font-bold text-gray-800">Editar Lugar de Evento</h2>
+    </template>
+
+    <Form @submit="submit" :validation-schema="schema" :initial-values="form">
+      <div class="grid gap-10">
+        <!-- Campo: Nombre -->
+        <div class="flex flex-col w-full max-w-md mx-auto">
+          <label for="name_place_event" class="text-left">Nombre del lugar</label>
+          <Field name="name_place_event" v-slot="{ field }">
+            <InputText v-bind="field" id="name_place_event" placeholder="" class="w-full" />
+          </Field>
+          <ErrorMessage name="name_place_event" class="text-red-500 text-xs" />
+        </div>
+
+        <!-- Campo: Ubicación -->
+        <div class="flex flex-col w-full max-w-md mx-auto">
+          <label for="ubication_place_event" class="text-left">Ubicación</label>
+          <Field name="ubication_place_event" v-slot="{ field }">
+            <InputText v-bind="field" id="ubication_place_event" placeholder="" class="w-full" />
+          </Field>
+          <ErrorMessage name="ubication_place_event" class="text-red-500 text-xs" />
+        </div>
+
+        <!-- Botones -->
+        <div class="flex justify-end w-full max-w-md mx-auto gap-2 mt-4">
+          <Button label="Cancelar" @click="visible = false" severity="secondary" />
+          <Button label="Guardar" type="submit" />
+        </div>
+      </div>
+    </Form>
+  </Dialog>
+</template>

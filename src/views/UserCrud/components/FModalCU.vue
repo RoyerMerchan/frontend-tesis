@@ -1,85 +1,87 @@
 <template>
-  <Dialog
-    v-model:visible="visible" header="Filtrar por Persona"
-    modal
-    :style="{ width: '400px' }"
-    class="rounded-md"
-  >
-    <div class="flex flex-col gap-4">
-      <label for="filtro" class="text-sm font-semibold">Nombre o Apellido</label>
-      <Select
-  v-model="personaSeleccionada"
-  :options="personaOpciones"
-  optionLabel="label"
-  optionValue="value"
-  placeholder="Selecciona persona"
-  class="w-full"
-/>
+  <Dialog v-model:visible="visible"  :modal="true" :closable="true" :style="{ width: '400px' }">
+     <template #header>
+        <h2 class="text-3xl font-bold text-gray-800">filtrar Usuario</h2>
+      </template>
+    <Form @submit="submit" :validation-schema="schema">
+      <div class="flex flex-col gap-4 ">
+        <label for="id_profile" class="text-sm font-semibold"></label>
+        <Field name="id_profile" v-slot="{ field }">
+          <Dropdown
+            v-bind="field"
+            :options="profiles"
+            optionLabel="profile_de"
+            :optionValue="(option) => Number(option.profile_id)"
+            placeholder="Selecciona perfil"
+            class="w-full"
+            id="id_profile"
+          />
+        </Field>
+        <ErrorMessage name="id_profile" class="text-red-500 text-xs" />
 
-      <div class="flex justify-end gap-2 mt-4">
-        <Button
-          label="Cancelar"
-          severity="warn"
-          @click="cerrar"
-        />
-        <Button
-          label="Filtrar"
-          icon="pi pi-search"
-          severity="primary"
-          @click="filtrar"
-        />
-        <Button label="Limpiar filtro" severity="danger" icon="pi pi-times" @click="limpiar" />
+        <div class="flex justify-end gap-2 mt-4">
+          <Button label="Cancelar" severity="secondary" @click="cerrar" />
+          <Button label="Filtrar" icon="pi pi-search" severity="primary" type="submit" />
+          <Button label="Limpiar filtro" icon="pi pi-times" severity="danger" @click="limpiar" />
+        </div>
       </div>
-    </div>
+    </Form>
   </Dialog>
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { Form, Field, ErrorMessage } from 'vee-validate';
+import * as yup from 'yup';
+import { toTypedSchema } from '@vee-validate/yup';
+
 import Dialog from 'primevue/dialog';
-// import InputText from 'primevue/inputtext';
 import Button from 'primevue/button';
-import Select from 'primevue/select';
-import { defineModel, defineEmits } from 'vue';
+import Dropdown from 'primevue/dropdown';
+import { send } from '@/api/send';
+import { useToast } from 'primevue/usetoast';
+import { ref, onMounted } from 'vue';
 
-// const props = defineProps({
-//   personaSeleccionada: {
-//     type: Number, // o String si usas nombres directamente
-//     required: false
-//   }
-// });
-
-const personaSeleccionada = ref(null);
-const personaOpciones = ref([
-  { label: 'Juan Pérez', value: 101 },
-  { label: 'Ana Gómez', value: 102 },
-  // Agrega más opciones según tus datos
-]);
-
-
-
+const toast = useToast();
 const visible = defineModel('visible');
-const emit = defineEmits(['filtrado', 'cerrar']);
+const emit = defineEmits(['filtrar', 'cerrar']);
 
-const nombreFiltro = ref('');
+const profiles = ref([]);
 
-const filtrar = () => {
-  emit('filtrado', nombreFiltro.value.trim().toLowerCase());
-  console.log('Filtrando por:', nombreFiltro.value);
+const schema = toTypedSchema(
+  yup.object({
+    id_profile: yup
+      .object({
+        value: yup
+          .number()
+          .typeError('Debe seleccionar un perfil válido')
+          .required('Perfil requerido')
+      })
+      .required('Perfil requerido')
+  })
+);
+
+onMounted(async () => {
+  try {
+    const response = await send({ endpoint: 'profile', method: 'get' });
+    profiles.value = response.data || [];
+  } catch (error) {
+    console.error('Error al cargar perfiles:', error);
+    toast.add({ severity: 'error', summary: 'Error', detail: 'No se pudieron cargar los perfiles.' });
+  }
+});
+
+const submit = (values) => {
+  emit('filtrar', values.id_profile.value);
+  visible.value = false;
+};
+
+const limpiar = () => {
+  emit('limpiar', null);
+  visible.value = false;
 };
 
 const cerrar = () => {
   emit('cerrar');
-  personaSeleccionada.value = null; // Limpiar selección al cerrar
-  nombreFiltro.value = ''; // Limpiar filtro
-  console.log('Filtro cerrado y limpiado');
+  visible.value = false;
 };
-
-
-
-const limpiar = () => {
-  personaSeleccionada.value = null;
-  emit('filtrado', null); // también actualiza el filtro en el padre
-};
-
 </script>

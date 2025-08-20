@@ -1,79 +1,88 @@
-<template>
-<Dialog v-model:visible="visible" header="Editar evento" :modal="true" :closable="true" :style="{ width: '600px'}" >
-    <Form @submit="submit" :validation-schema="schema" class="">
-  <div class=" grid gap 10">
-
-
-    <div class="flex flex-col w-full max-w-md mx-auto">
-      <label for="event" class="text-left">evento</label>
-      <Field name="event" v-slot="{ field }">
-        <InputText v-bind="field" id="event" placeholder="Ingrese evento" class="w-full" />
-      </Field>
-      <ErrorMessage name="event" class="text-red-500 text-xs" />
-    </div>
-
-
-    <!-- Botones -->
-    <div class="flex justify-end gap-2 mt-4">
-      <Button label="Cancelar" severity="secondary" @click="visible = false" />
-      <Button :label="modoEdicion ? 'Actualizar' : 'Guardar'" type="submit" />
-    </div>
-
-
-  </div>
-
-    </Form>
-  </Dialog>
-</template>
-
 <script setup>
-import { ref, watch } from 'vue';
 import { Form, Field, ErrorMessage } from 'vee-validate';
 import * as yup from 'yup';
 import { toTypedSchema } from '@vee-validate/yup';
+
 import Dialog from 'primevue/dialog';
 import Button from 'primevue/button';
 import InputText from 'primevue/inputtext';
+import { send } from '@/api/send';
+import { useToast } from 'primevue/usetoast';
+import { ref, watch } from 'vue';
 
-
-
-
+const toast = useToast();
 const visible = defineModel('visible');
-
-// 🆕 Nuevas props
-const props = defineProps({
-  modoEdicion: Boolean,
-  usuarioEditando: Object,
-});
+const props = defineProps({ evento: Object });
+const emit = defineEmits(['update']);
 
 const form = ref({
-  event: '',
+  id_event: null,
+  name_event: ''
 });
 
-// 🧠 Rellenar campos si hay usuario a editar
-watch(() => props.eventeditando, (event) => {
-  if (props.modoEdicion && event) {
-    form.value = { ...event };
+watch(() => props.evento, (val) => {
+  if (val) {
+    form.value = {
+      id_event: val.event_id,
+      name_event: val.na_event
+    };
   }
 }, { immediate: true });
 
-// Validación del formulario
+console.log('Evento:', props.evento);
+
+
 const schema = toTypedSchema(
   yup.object({
-    event: yup.string().required('El nombre del evento es obligatorio').min(3, 'El nombre del evento debe tener al menos 3 caracteres'),
+    name_event: yup.string().required('Nombre del evento requerido')
   })
 );
 
+const submit = async (values) => {
+  const payload = {
+    id_event: form.value.id_event,
+    name_event: values.name_event
+  };
 
+  try {
+    await send({
+      endpoint: 'event',
+      method: 'put',
+      body: payload
+    });
 
-// ✨ Emitir evento diferente según modo
-const emit = defineEmits(['guardar', 'actualizar']);
-const submit = () => {
-  if (props.modoEdicion) {
-    emit('actualizar', form.value);
-  } else {
-    emit('guardar', form.value);
+    toast.add({ severity: 'success', summary: 'Actualizado', detail: 'Evento actualizado correctamente.' });
+    visible.value = false;
+    emit('update');
+  } catch (error) {
+    toast.add({ severity: 'error', summary: 'Error', detail: 'No se pudo actualizar el evento.' });
   }
-  visible.value = false;
 };
 </script>
+
+<template>
+  <Dialog v-model:visible="visible" :modal="true" :closable="true" :style="{ width: '500px' }">
+    <template #header>
+      <h2 class="text-4xl font-bold text-gray-800">Editar Evento</h2>
+    </template>
+
+    <Form @submit="submit" :validation-schema="schema" :initial-values="form">
+      <div class="grid gap-10">
+        <!-- Campo: Nombre del evento -->
+        <div class="flex flex-col w-full max-w-md mx-auto">
+          <label for="name_event" class="text-left"></label>
+          <Field name="name_event" v-slot="{ field }">
+            <InputText v-bind="field" id="name_event" placeholder="Ingrese nuevo nombre" class="w-full" />
+          </Field>
+          <ErrorMessage name="name_event" class="text-red-500 text-xs" />
+        </div>
+
+        <!-- Botones -->
+        <div class="flex justify-end w-full max-w-md mx-auto gap-2 mt-4">
+          <Button label="Cancelar" @click="visible = false" severity="secondary" />
+          <Button label="Guardar" type="submit" />
+        </div>
+      </div>
+    </Form>
+  </Dialog>
+</template>

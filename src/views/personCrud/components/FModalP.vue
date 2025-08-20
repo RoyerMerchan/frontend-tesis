@@ -1,86 +1,88 @@
 <template>
-  <Dialog
-    v-model:visible="visible" header="Filtrar por Tipo de Persona"
-    modal
-    :style="{ width: '400px' }"
-    class="rounded-md"
-  >
-    <div class="flex flex-col gap-4">
-      <label for="filtro" class="text-sm font-semibold">tipoPersona</label>
-      <Select
-  v-model="tpSeleccionada"
-  :options="tpOpciones"
-  optionLabel="label"
-  optionValue="value"
-  placeholder="Selecciona tipo persona"
-  class="w-full"
-/>
+  <Dialog v-model:visible="visible" :modal="true" :closable="true" :style="{ width: '400px' }">
+    <template #header>
+      <h2 class="text-3xl font-bold text-gray-800">Filtrar por Tipo de Persona</h2>
+    </template>
 
-      <div class="flex justify-end gap-2 mt-4">
-        <Button
-          label="Cancelar"
-          severity="warn"
-          @click="cerrar"
-        />
-        <Button
-          label="Filtrar"
-          icon="pi pi-search"
-          severity="primary"
-          @click="filtrar"
-        />
-        <Button label="Limpiar filtro" severity="danger" icon="pi pi-times" @click="limpiar" />
+    <Form @submit="submit" :validation-schema="schema">
+      <div class="flex flex-col gap-4">
+        <label for="id_type_person" class="text-sm font-semibold">Tipo de Persona</label>
+        <Field name="id_type_person" v-slot="{ field }">
+          <Dropdown
+            v-bind="field"
+            :options="typePersons"
+            optionLabel="de_type_person"
+            :optionValue="option => Number(option.type_person_id)"
+            placeholder="Selecciona tipo"
+            class="w-full"
+            id="id_type_person"
+          />
+        </Field>
+        <ErrorMessage name="id_type_person" class="text-red-500 text-xs" />
+
+        <div class="flex justify-end gap-2 mt-4">
+          <Button label="Cancelar" severity="secondary" @click="cerrar" />
+          <Button label="Filtrar" icon="pi pi-search" severity="primary" type="submit" />
+          <Button label="Limpiar filtro" icon="pi pi-times" severity="danger" @click="limpiar" />
+        </div>
       </div>
-    </div>
+    </Form>
   </Dialog>
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { Form, Field, ErrorMessage } from 'vee-validate';
+import * as yup from 'yup';
+import { toTypedSchema } from '@vee-validate/yup';
+
 import Dialog from 'primevue/dialog';
-// import InputText from 'primevue/inputtext';
 import Button from 'primevue/button';
-import Select from 'primevue/select';
-import { defineModel, defineEmits } from 'vue';
+import Dropdown from 'primevue/dropdown';
+import { send } from '@/api/send';
+import { useToast } from 'primevue/usetoast';
+import { ref, onMounted } from 'vue';
 
-// const props = defineProps({
-//   personaSeleccionada: {
-//     type: Number, // o String si usas nombres directamente
-//     required: false
-//   }
-// });
-
-const tpSeleccionada = ref(null);
-const tpOpciones = ref([
-  { label: 'Estudiante', value: 101 },
-  { label: 'Profesor', value: 102 },
-  { label: 'Administrador', value: 103 },
-  // Agrega más opciones según tus datos
-]);
-
-
-
+const toast = useToast();
 const visible = defineModel('visible');
-const emit = defineEmits(['filtrado', 'cerrar']);
+const emit = defineEmits(['filtrar', 'limpiar', 'cerrar']);
 
-const nombreFiltro = ref('');
+const typePersons = ref([]);
 
-const filtrar = () => {
-  emit('filtrado', nombreFiltro.value.trim().toLowerCase());
-  console.log('Filtrando por:', nombreFiltro.value);
+const schema = toTypedSchema(
+  yup.object({
+    id_type_person: yup
+      .object({
+        value: yup
+          .number()
+          .typeError('Debe seleccionar un perfil válido')
+          .required('Perfil requerido')
+      })
+      .required('Perfil requerido')
+  })
+);
+
+onMounted(async () => {
+  try {
+    const response = await send({ endpoint: 'typeperson', method: 'get' });
+    typePersons.value = response.data || [];
+  } catch (error) {
+    console.error('Error al cargar tipos de persona:', error);
+    toast.add({ severity: 'error', summary: 'Error', detail: 'No se pudieron cargar los tipos de persona.' });
+  }
+});
+
+const submit = (values) => {
+  emit('filtrar', values.id_type_person.value);
+  visible.value = false;
+};
+
+const limpiar = () => {
+  emit('limpiar', null);
+  visible.value = false;
 };
 
 const cerrar = () => {
   emit('cerrar');
-  tpSeleccionada.value = null; // Limpiar selección al cerrar
-  nombreFiltro.value = ''; // Limpiar filtro
-  console.log('Filtro cerrado y limpiado');
+  visible.value = false;
 };
-
-
-
-const limpiar = () => {
-  tpSeleccionada.value = null;
-  emit('filtrado', null); // también actualiza el filtro en el padre
-};
-
 </script>

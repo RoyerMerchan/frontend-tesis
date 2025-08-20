@@ -1,92 +1,102 @@
-<template>
-    <div class="card w-full bg-gray-100 flex items-center justify-center">
-        <div class="w-full">
-            <h2 class="text-2xl font-bold mb-6">Mantenimiento de Posiciones</h2>
-            <CModal v-model:visible="modalVisibleC" />
-            <EModal v-model:visible="modalVisibleE" />
-
-            <div class="flex flex-wrap gap-2 p-5">
-                <Button label="Nueva posicion" icon="pi pi-plus" @click="abrirCrear" />
-                <Button label="Eliminar" icon="pi pi-trash" severity="danger" />
-            </div>
-            <div class="overflow-x-auto">
-                <DataTable :value="posicionVisibles" v-model:selection="seleccionados" selectionMode="single" dataKey="id" :rowHover="true" class="w-full">
-                    <Column selectionMode="multiple" headerStyle="width: 3rem" />
-                    <Column field="position_name" header="Nombre posicion" />
-                    <Column header="Acciones">
-                        <template #body="{ data }">
-                            <Button label="editar" icon="pi pi-pencil" class="p-button-sm mr-2" @click="abrirEditar(data)" severity="success" />
-                            <!-- <Button label="borrar" icon="pi pi-trash" class="p-button-sm p-button-danger" @click="confirmarEliminar(data)" /> -->
-                        </template>
-                    </Column>
-                </DataTable>
-            </div>
-        </div>
-    </div>
-</template>
-
 <script setup>
-import { ref } from 'vue';
+import { onMounted, ref } from 'vue';
 
+import { send } from '@/api/send';
 import Button from 'primevue/button';
 import Column from 'primevue/column';
 import DataTable from 'primevue/datatable';
-import CModal from '../components/CmodalP.vue';
-import EModal from '../components/EmodalP.vue';
-// import FModal from '../components/FModalCU.vue'; // Si necesitas el filtro, descomentar esta línea
+import Toast from 'primevue/toast';
 
-// Datos simulados
-const position = ref([
-    { id: 1, position_name: 'Portero' },
-    { id: 2, position_name: 'Defensa' },
-    { id: 3, position_name: 'Centrocampista' },
-    { id: 4, position_name: 'Delantero' },
-    { id: 5, position_name: 'Extremo' },
-    { id: 6, position_name: 'Mediocampista' },
-    { id: 7, position_name: 'Lateral' },
-    { id: 8, position_name: 'Volante' },
-    { id: 9, position_name: 'Delantero centro' },
-    { id: 10, position_name: 'Defensa central' },
-    { id: 11, position_name: 'Ala' },
-    { id: 12, position_name: 'Pivot' },
-    { id: 13, position_name: 'Carrilero' },
-    { id: 14, position_name: 'Interior' },
-    { id: 15, position_name: 'Extremo derecho' },
-    { id: 16, position_name: 'Extremo izquierdo' },
-    { id: 17, position_name: 'Segundo delantero' },
-    { id: 18, position_name: 'Mediapunta' },
-    { id: 19, position_name: 'Defensa lateral' },
-    { id: 20, position_name: 'Defensa central izquierdo' }
-]);
-const posicionVisibles = ref(position);
+import CModalPosition from '../components/CmodalP.vue';
+import EModalPosition from '../components/EmodalP.vue';
 
+import { useToast } from 'primevue/usetoast';
+
+const toast = useToast();
+
+const posiciones = ref([]);
+const seleccionadas = ref([]);
 const modalVisibleC = ref(false);
 const modalVisibleE = ref(false);
-const seleccionados = ref([]);
-const modoEdicion = ref(false);
-const positionedit = ref(null);
-
-const formulario = ref({
-    position_name: ''
-});
+const posicionEditando = ref(null);
 
 const abrirCrear = () => {
-    modoEdicion.value = false;
-    positionedit.value = null;
-    formulario.value = {
-        descripcion: ''
-    };
-    modalVisibleC.value = true;
+  posicionEditando.value = null;
+  modalVisibleC.value = true;
 };
 
-const abrirEditar = (posit) => {
-    modoEdicion.value = true;
-    positionedit.value = posit;
-    Object.assign(formulario.value, posit);
+const abrirEdicion = (posicion) => {
+  if (posicion) {
+    posicionEditando.value = posicion;
     modalVisibleE.value = true;
+  } else {
+    toast.add({ severity: 'warn', summary: 'Atención', detail: 'Selecciona una posición para editar.' });
+  }
 };
 
-// const confirmarEliminar = (usuario) => {
-//   usuarios.value = usuarios.value.filter(u => u.id !== usuario.id);
-// };
+const cargarPosiciones = async () => {
+  try {
+    const response = await send({
+      endpoint: 'position',
+      method: 'get'
+    });
+    posiciones.value = response.data || [];
+  } catch (error) {
+    toast.add({ severity: 'error', summary: 'Error', detail: 'No se pudieron cargar las posiciones.' });
+  }
+};
+
+const eliminarPosiciones = async () => {
+  if (!seleccionadas.value.length) {
+    toast.add({ severity: 'warn', summary: 'Atención', detail: 'Selecciona al menos una posición para eliminar.' });
+    return;
+  }
+
+  try {
+    await Promise.all(
+      seleccionadas.value.map(async (posicion) => {
+        await send({
+          endpoint: `position/${posicion.position_id}`,
+          method: 'delete'
+        });
+      })
+    );
+    toast.add({ severity: 'success', summary: 'Eliminado', detail: 'Posiciones eliminadas correctamente.' });
+    await cargarPosiciones();
+    seleccionadas.value = [];
+  } catch (error) {
+    toast.add({ severity: 'error', summary: 'Error', detail: 'No se pudieron eliminar todas las posiciones.' });
+  }
+};
+
+onMounted(cargarPosiciones);
 </script>
+
+<template>
+  <Toast />
+  <div class="card w-full bg-gray-100 flex items-center justify-center">
+    <div class="w-full">
+      <h2 class="text-2xl font-bold mb-6">Mantenimiento de Posiciones</h2>
+
+      <CModalPosition v-model:visible="modalVisibleC" @create="cargarPosiciones" />
+      <EModalPosition v-model:visible="modalVisibleE" :posicion="posicionEditando" @update="cargarPosiciones" />
+
+      <div class="flex flex-wrap gap-2 p-5">
+        <Button label="Nueva Posición" icon="pi pi-plus" @click="abrirCrear" />
+        <Button label="Eliminar" icon="pi pi-trash" severity="danger" @click="eliminarPosiciones" />
+      </div>
+
+      <div class="overflow-x-auto">
+        <DataTable :value="posiciones" v-model:selection="seleccionadas" selectionMode="multiple" dataKey="position_id" :rowHover="true" class="w-full">
+          <Column selectionMode="multiple" headerStyle="width: 3rem" />
+          <Column field="na_position" header="Nombre de la Posición" />
+          <Column header="Acciones">
+            <template #body="{ data }">
+              <Button label="Editar" icon="pi pi-pencil" class="p-button-sm mr-2" @click="abrirEdicion(data)" severity="success" />
+            </template>
+          </Column>
+        </DataTable>
+      </div>
+    </div>
+  </div>
+</template>

@@ -1,63 +1,4 @@
-<template>
-  <Dialog v-model:visible="visible" header="Crear equipo" :modal="true" :closable="true" :style="{ width: '600px'}" >
-    <Form @submit="submit" :validation-schema="schema" class="">
-  <div class=" grid gap 10">
-
-
-    <div class="flex flex-col w-full max-w-md mx-auto">
-      <label for="name_team" class="text-left">nombre equipo</label>
-      <Field name="name_team" v-slot="{ field }">
-        <InputText v-bind="field" id="name_team" placeholder="Ingrese nombre" class="w-full" />
-      </Field>
-      <ErrorMessage name="name_team" class="text-red-500 text-xs" />
-    </div>
-
-    <div class="flex flex-col w-full max-w-md mx-auto">
-      <label for="id_sport" class="text-left">deporte</label>
-      <Field name="id_sport" v-slot="{ field }">
-        <Dropdown
-          v-bind="field"
-          :options="tiposDeporte"
-          optionLabel="label"
-          optionValue="value"
-          placeholder="Selecciona uno"
-          class="w-full"
-          id="id_sport"
-        />
-      </Field>
-      <ErrorMessage name="id_sport" class="text-red-500 text-xs" />
-    </div>
-
-    <div class="flex flex-col w-full max-w-md mx-auto">
-      <label for="id_institucion" class="text-left">deporte</label>
-      <Field name="id_institucion" v-slot="{ field }">
-        <Dropdown
-          v-bind="field"
-          :options="tiposInstitucion"
-          optionLabel="label"
-          optionValue="value"
-          placeholder="Selecciona uno"
-          class="w-full"
-          id="id_institucion"
-        />
-      </Field>
-      <ErrorMessage name="id_sport" class="text-red-500 text-xs" />
-    </div>
-
-    <!-- Botones -->
-    <div class="flex justify-end w-full max-w-md mx-auto gap-2 mt-4">
-      <Button label="Cancelar" @click="visible = false" severity="secondary" />
-      <Button label="Guardar" type="submit" />
-    </div>
-
-  </div>
-
-    </Form>
-  </Dialog>
-</template>
-
 <script setup>
-import { ref } from 'vue';
 import { Form, Field, ErrorMessage } from 'vee-validate';
 import * as yup from 'yup';
 import { toTypedSchema } from '@vee-validate/yup';
@@ -66,47 +7,130 @@ import Dialog from 'primevue/dialog';
 import Button from 'primevue/button';
 import InputText from 'primevue/inputtext';
 import Dropdown from 'primevue/dropdown';
+import { send } from '@/api/send';
+import { useToast } from 'primevue/usetoast';
+import { ref, onMounted } from 'vue';
 
-
-
-
-// Props para control externo (opcional)
+const toast = useToast();
 const visible = defineModel('visible');
+const emit = defineEmits(['create']);
 
-const form = ref({
-  name_team: '',
-  id_sport: null,
-  id_institucion: null,
-});
-
-const tiposDeporte = [
-  { label: 'Fútbol', value: 1 },
-  { label: 'Baloncesto', value: 2 },
-  { label: 'Tenis', value: 3 },
-  { label: 'Natación', value: 4 },
-  { label: 'Atletismo', value: 5 },
-];
-
-const tiposInstitucion = [
-  { label: 'Institución A', value: 1 },
-  { label: 'Institución B', value: 2 },
-  { label: 'Institución C', value: 3 },
-];
+const sports = ref([]);
+const institutions = ref([]);
 
 const schema = toTypedSchema(
   yup.object({
-    name_team: yup.string().required('El nombre del equipo es obligatorio'),
-    id_sport: yup.number().required('El deporte es obligatorio'),
-    id_institucion: yup.number().required('La institución es obligatoria'),
+    na_team: yup.string().required('Nombre requerido'),
+    sport_id: yup
+      .object({
+        value: yup.number().typeError('Selecciona un deporte válido').required('Requerido')
+      })
+      .required('Requerido'),
+    institution_id: yup
+      .object({
+        value: yup.number().typeError('Selecciona una institución válida').required('Requerido')
+      })
+      .required('Requerido')
   })
 );
 
+onMounted(async () => {
+  try {
+    const sportRes = await send({ endpoint: 'sport', method: 'get' });
+    sports.value = sportRes.data || [];
+  } catch (error) {
+    toast.add({ severity: 'error', summary: 'Error', detail: 'No se pudieron cargar los deportes.' });
+  }
 
+  try {
+    const instRes = await send({ endpoint: 'institution', method: 'get' });
+    institutions.value = instRes.data || [];
+  } catch (error) {
+    toast.add({ severity: 'error', summary: 'Error', detail: 'No se pudieron cargar las instituciones.' });
+  }
+});
 
-
-const submit = () => {
-  console.log('Formulario válido:', form.value);
+const submit = async (values) => {
   visible.value = false;
-  // Aquí puedes emitir el evento o hacer la llamada a API
+
+  const payload = {
+    na_team: values.na_team,
+    sport_id: values.sport_id.value,
+    institution_id: values.institution_id.value
+  };
+console.log('Payload:', payload);
+
+  try {
+    await send({
+      endpoint: 'team',
+      method: 'post',
+      body: payload
+    });
+    toast.add({ severity: 'success', summary: 'Éxito', detail: 'Equipo creado correctamente.' });
+    emit('create');
+  } catch (error) {
+    toast.add({ severity: 'error', summary: 'Error', detail: 'No se pudo crear el equipo.' });
+  }
 };
 </script>
+
+<template>
+  <Dialog v-model:visible="visible" :modal="true" :closable="true" :style="{ width: '500px' }">
+    <template #header>
+      <h2 class="text-3xl font-bold text-gray-800">Crear Equipo</h2>
+    </template>
+
+    <Form @submit="submit" :validation-schema="schema">
+      <div class="grid gap-6">
+        <!-- Nombre del equipo -->
+        <div class="flex flex-col w-full max-w-md mx-auto">
+          <label for="na_team" class="text-left">Nombre del equipo</label>
+          <Field name="na_team" v-slot="{ field }">
+            <InputText v-bind="field" id="na_team" placeholder="" class="w-full" />
+          </Field>
+          <ErrorMessage name="na_team" class="text-red-500 text-xs" />
+        </div>
+
+        <!-- Deporte -->
+        <div class="flex flex-col w-full max-w-md mx-auto">
+          <label for="sport_id" class="text-left">Deporte</label>
+          <Field name="sport_id" v-slot="{ field }">
+            <Dropdown
+              v-bind="field"
+              :options="sports"
+              optionLabel="na_sport"
+              :optionValue="(option) => Number(option.sport_id)"
+              placeholder="Selecciona un deporte"
+              class="w-full"
+              id="sport_id"
+            />
+          </Field>
+          <ErrorMessage name="sport_id" class="text-red-500 text-xs" />
+        </div>
+
+        <!-- Institución -->
+        <div class="flex flex-col w-full max-w-md mx-auto">
+          <label for="institution_id" class="text-left">Institución</label>
+          <Field name="institution_id" v-slot="{ field }">
+            <Dropdown
+              v-bind="field"
+              :options="institutions"
+              optionLabel="na_institucion"
+              :optionValue="(option) => Number(option.institucion_id)"
+              placeholder="Selecciona una institución"
+              class="w-full"
+              id="institution_id"
+            />
+          </Field>
+          <ErrorMessage name="institution_id" class="text-red-500 text-xs" />
+        </div>
+
+        <!-- Botones -->
+        <div class="flex justify-end w-full max-w-md mx-auto gap-2 mt-4">
+          <Button label="Cancelar" @click="visible = false" severity="secondary" />
+          <Button label="Guardar" type="submit" />
+        </div>
+      </div>
+    </Form>
+  </Dialog>
+</template>

@@ -1,79 +1,89 @@
-<template>
-<Dialog v-model:visible="visible" header="Editar institucion" :modal="true" :closable="true" :style="{ width: '600px'}" >
-    <Form @submit="submit" :validation-schema="schema" class="">
-  <div class=" grid gap 10">
-
-
-    <div class="flex flex-col w-full max-w-md mx-auto">
-      <label for="name_institucion" class="text-left">institucion</label>
-      <Field name="name_institucion" v-slot="{ field }">
-        <InputText v-bind="field" id="name_institucion" placeholder="Ingrese institucion" class="w-full" />
-      </Field>
-      <ErrorMessage name="name_institucion" class="text-red-500 text-xs" />
-    </div>
-
-
-    <!-- Botones -->
-    <div class="flex justify-end gap-2 mt-4">
-      <Button label="Cancelar" severity="secondary" @click="visible = false" />
-      <Button :label="modoEdicion ? 'Actualizar' : 'Guardar'" type="submit" />
-    </div>
-
-
-  </div>
-
-    </Form>
-  </Dialog>
-</template>
-
 <script setup>
-import { ref, watch } from 'vue';
 import { Form, Field, ErrorMessage } from 'vee-validate';
 import * as yup from 'yup';
 import { toTypedSchema } from '@vee-validate/yup';
+
 import Dialog from 'primevue/dialog';
 import Button from 'primevue/button';
 import InputText from 'primevue/inputtext';
+import { send } from '@/api/send';
+import { useToast } from 'primevue/usetoast';
+import { ref, watch } from 'vue';
 
-
-
-
+const toast = useToast();
 const visible = defineModel('visible');
-
-// 🆕 Nuevas props
-const props = defineProps({
-  modoEdicion: Boolean,
-  usuarioEditando: Object,
-});
+const props = defineProps({ institucion: Object });
+const emit = defineEmits(['update']);
 
 const form = ref({
-  name_institucion: '',
+  id_institutions: null,
+  name_institutions: ''
 });
 
-// 🧠 Rellenar campos si hay usuario a editar
-watch(() => props.instituteditando, (institut) => {
-  if (props.modoEdicion && institut) {
-    form.value = { ...institut };
-  }
+watch(() => props.institucion, (val) => {
+  if (val) {
+    form.value = {
+      id_institutions: val.institucion_id,
+      name_institutions: val.na_institucion
+    };
+}
 }, { immediate: true });
 
-// Validación del formulario
+
 const schema = toTypedSchema(
-  yup.object({
-    name_institucion: yup.string().required('El nombre de la institución es obligatorio'),
-  })
+    yup.object({
+        name_institutions: yup.string().required('Nombre requerido')
+    })
 );
 
+const submit = async (values) => {
+    const payload = {
+        id_institutions: form.value.id_institutions,
+        name_institutions: values.name_institutions
+    };
+    console.log('Form:', form.value);
+    console.log('Payload:', payload);
 
+  try {
+    await send({
+      endpoint: 'institution',
+      method: 'put',
+      body: payload
+    });
 
-// ✨ Emitir evento diferente según modo
-const emit = defineEmits(['guardar', 'actualizar']);
-const submit = () => {
-  if (props.modoEdicion) {
-    emit('actualizar', form.value);
-  } else {
-    emit('guardar', form.value);
+    toast.add({ severity: 'success', summary: 'Actualizado', detail: 'Institución actualizada correctamente.' });
+    visible.value = false;
+    emit('update');
+  } catch (error) {
+    console.error('Error al actualizar institución:', error);
+    toast.add({ severity: 'error', summary: 'Error', detail: 'No se pudo actualizar la institución.' });
   }
-  visible.value = false;
 };
 </script>
+
+<template>
+  <Dialog v-model:visible="visible" :modal="true" :closable="true" :style="{ width: '500px' }">
+    <template #header>
+      <h2 class="text-4xl font-bold text-gray-800">Editar Institución</h2>
+    </template>
+
+    <Form @submit="submit" :validation-schema="schema" :initial-values="form">
+      <div class="grid gap-10">
+        <!-- Campo: Nombre de institución -->
+        <div class="flex flex-col w-full max-w-md mx-auto">
+          <label for="name_institutions" class="text-left">Nombre</label>
+          <Field name="name_institutions" v-slot="{ field }">
+            <InputText v-bind="field" id="name_institutions" placeholder="" class="w-full" />
+          </Field>
+          <ErrorMessage name="name_institutions" class="text-red-500 text-xs" />
+        </div>
+
+        <!-- Botones -->
+        <div class="flex justify-end w-full max-w-md mx-auto gap-2 mt-4">
+          <Button label="Cancelar" @click="visible = false" severity="secondary" />
+          <Button label="Guardar" type="submit" />
+        </div>
+      </div>
+    </Form>
+  </Dialog>
+</template>

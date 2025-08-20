@@ -1,102 +1,121 @@
-<template>
-<Dialog v-model:visible="visible" header="Editar tipo competencia" :modal="true" :closable="true" :style="{ width: '600px'}" >
-    <Form @submit="submit" :validation-schema="schema" class="">
-  <div class=" grid gap 10">
-
-    <div class="flex flex-col w-full max-w-md mx-auto">
-      <label for="na_type_competency" class="text-left">nombre tipo competencia</label>
-      <Field name="na_type_competency" v-slot="{ field }">
-        <InputText v-bind="field" id="na_type_competency" placeholder="Ingrese nombre" class="w-full" />
-      </Field>
-      <ErrorMessage name="na_type_competency" class="text-red-500 text-xs" />
-    </div>
-
-
-
-    <div class="flex flex-col w-full max-w-md mx-auto">
-      <label for="id_sport" class="text-left">deporte</label>
-      <Field name="id_sport" v-slot="{ field }">
-        <Select
-          v-bind="field"
-          :options="tiposDeporte"
-          optionLabel="label"
-          optionValue="value"
-          placeholder="Selecciona uno"
-          class="w-full"
-          id="id_sport"
-        />
-      </Field>
-      <ErrorMessage name="id_sport" class="text-red-500 text-xs" />
-    </div>
-
-    <!-- Botones -->
-    <div class="flex justify-end gap-2 mt-4">
-      <Button label="Cancelar" severity="secondary" @click="visible = false" />
-      <Button :label="modoEdicion ? 'Actualizar' : 'Guardar'" type="submit" />
-    </div>
-
-
-  </div>
-
-    </Form>
-  </Dialog>
-</template>
-
 <script setup>
-import { ref, watch } from 'vue';
 import { Form, Field, ErrorMessage } from 'vee-validate';
 import * as yup from 'yup';
 import { toTypedSchema } from '@vee-validate/yup';
+
 import Dialog from 'primevue/dialog';
 import Button from 'primevue/button';
 import InputText from 'primevue/inputtext';
-import { Select } from 'primevue';
+import Dropdown from 'primevue/dropdown';
+import { send } from '@/api/send';
+import { useToast } from 'primevue/usetoast';
+import { ref, onMounted, computed, watch } from 'vue';
 
-
-
+const toast = useToast();
 const visible = defineModel('visible');
-
-// 🆕 Nuevas props
+const emit = defineEmits(['update']);
 const props = defineProps({
-  modoEdicion: Boolean,
-  usuarioEditando: Object,
+  competencia: Object
 });
 
+const sports = ref([]);
 const form = ref({
-  na_type_competency: '',
-  id_sport: null,
+  type_comp_id: null,
+  na_type_comp: '',
+  sport_id: null
 });
-
-// 🧠 Rellenar campos si hay usuario a editar
-watch(() => props.tcEditando, (usuario) => {
-  if (props.modoEdicion && usuario) {
-    form.value = { ...usuario };
-  }
-}, { immediate: true });
-
-const tiposDeporte = [
-  { label: 'Fútbol', value: 1 },
-  { label: 'Baloncesto', value: 2 },
-  { label: 'Tenis', value: 3 },
-  { label: 'Natación', value: 4 },
-  { label: 'Atletismo', value: 5 },
-];
 
 const schema = toTypedSchema(
   yup.object({
-    na_type_competency: yup.string().required('El nombre es obligatorio'),
-    id_sport: yup.number().required('El deporte es obligatorio').nullable(),
+    na_type_comp: yup.string().required('nombre requerido'),
+    sport_id: yup
+      .object({
+        value: yup.number().typeError('Selecciona un equipo válido').required('Requerido')
+      })
+      .required('Requerido')
   })
 );
 
-// ✨ Emitir evento diferente según modo
-const emit = defineEmits(['guardar', 'actualizar']);
-const submit = () => {
-  if (props.modoEdicion) {
-    emit('actualizar', form.value);
-  } else {
-    emit('guardar', form.value);
+onMounted(async () => {
+  try {
+    const sportRes = await send({ endpoint: 'sport', method: 'get' });
+    sports.value = sportRes.data || [];
+  } catch (error) {
+    toast.add({ severity: 'error', summary: 'Error', detail: 'No se pudieron cargar los deportes.' });
   }
+});
+
+watch(() => props.competencia, (val) => {
+  if (val) {
+    form.value = {
+      type_comp_id: val.type_comp_id,
+      na_type_comp: val.na_type_comp,
+      sport_id: { value: Number(val.sport_id) }
+    };
+  }
+}, { immediate: true });
+
+const submit = async (values) => {
   visible.value = false;
+
+  const payload = {
+    type_comp_id: form.value.type_comp_id,
+    na_type_comp: values.na_type_comp,
+    sport_id: values.sport_id.value,
+  };
+
+  try {
+    await send({
+      endpoint: `typecompetition`,
+      method: 'put',
+      body: payload
+    });
+    toast.add({ severity: 'success', summary: 'Actualizado', detail: 'tipo competencia actualizado correctamente.' });
+    emit('update');
+  } catch (error) {
+    toast.add({ severity: 'error', summary: 'Error', detail: 'No se pudo actualizar el tipo competicion.' });
+  }
 };
 </script>
+
+<template>
+  <Dialog v-model:visible="visible" :modal="true" :closable="true" :style="{ width: '500px' }">
+    <template #header>
+      <h2 class="text-3xl font-bold text-gray-800">Editar tipo competencia</h2>
+    </template>
+
+    <Form @submit="submit" :validation-schema="schema" :initial-values="form">
+      <div class="grid gap-6">
+        <div class="flex flex-col w-full max-w-md mx-auto">
+          <label for="na_type_comp" class="text-left">Nombre de tipo</label>
+          <Field name="na_type_comp" v-slot="{ field }">
+            <InputText v-bind="field" id="na_type_comp" class="w-full" />
+          </Field>
+          <ErrorMessage name="na_type_comp" class="text-red-500 text-xs" />
+        </div>
+
+        <div class="flex flex-col w-full max-w-md mx-auto">
+          <label for="sport_id" class="text-left">Equipo</label>
+          <Field name="sport_id" v-slot="{ field }">
+            <Dropdown
+              v-bind="field"
+              :options="sports"
+              optionLabel="na_sport"
+              :optionValue="option => Number(option.sport_id)"
+              placeholder="Selecciona un deporte"
+              class="w-full"
+              id="sport_id"
+            />
+          </Field>
+          <ErrorMessage name="sport_id" class="text-red-500 text-xs" />
+        </div>
+
+
+        <div class="flex justify-end w-full max-w-md mx-auto gap-2 mt-4">
+          <Button label="Cancelar" @click="visible = false" severity="secondary" />
+          <Button label="Actualizar" type="submit" />
+        </div>
+      </div>
+    </Form>
+  </Dialog>
+</template>
