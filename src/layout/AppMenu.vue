@@ -9,6 +9,16 @@ const model = ref([
         items: [{ label: 'Dashboard', icon: 'pi pi-fw pi-home', to: '/' }]
     },
     {
+        label: '',
+        items: [
+            { label: 'Inicio', icon: 'pi pi-fw pi-home', to: '/home' },
+            { label: 'Equipos', icon: 'pi pi-fw pi-users', to: '/CTeam' },
+            { label: 'Torneos', icon: 'pi pi-fw pi-calendar', to: '/torneo' },
+            { label: 'Estadisticas', icon: 'pi pi-fw pi-trophy', to: '/Estadistica' }
+
+        ]
+    },
+    {
         label: 'Mantenimiento',
         items: [
             { label: 'Institucion', icon: 'pi pi-fw pi-home', to: '/institution' },

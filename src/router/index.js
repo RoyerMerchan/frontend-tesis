@@ -5,6 +5,35 @@ const router = createRouter({
     history: createWebHistory(),
     routes: [
         {
+            path: '/login',
+            name: 'login',
+            component: () => import('@/layout/publicLayout.vue'),
+            children: [
+                {
+                    path: '',
+                    name: 'loginview',
+                    component: () => import('@/views/auth/login/loginview.vue')
+                },
+                {
+                    path: '/register',
+                    name: 'register',
+                    component: () => import('@/views/auth/register/registerView.vue')
+                ,
+            },
+            {
+                path: '/recover',
+                name: 'recover',
+                component: () => import('@/views/auth/recover/recoverview.vue')
+            },
+            {
+                path: '/reset-password',
+                name: 'reset-password',
+                component: () => import('@/views/auth/recover/resetPassword.vue')
+            }
+
+            ]
+        },
+        {
             path: '/',
             component: AppLayout,
             children: [
@@ -13,6 +42,29 @@ const router = createRouter({
                     name: 'dashboard',
                     component: () => import('@/views/Dashboard.vue')
                 },
+                {
+                    path: '/home',
+                    name: 'home',
+                    component: () => import('@/views/client/home.vue')
+                },
+                {
+                    path: '/CTeam',
+                    name: 'CTeam',
+                    component: () => import('@/views/client/teams/equipoview.vue')
+                },
+                {
+                    path: '/torneo',
+                    name: 'torneo',
+                    component: () => import('@/views/client/tournament/tournametView.vue')
+                },
+                {
+                    path: '/Estadistica',
+                    name: 'Estadistica',
+                    component: () => import('@/views/client/stadistics/stadisticsview.vue')
+                },
+
+
+                // CRUD routes
                 {
                     path: '/competency',
                     name: 'competency',
